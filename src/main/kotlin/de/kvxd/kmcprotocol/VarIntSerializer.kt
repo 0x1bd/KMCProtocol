@@ -1,0 +1,23 @@
+package de.kvxd.kmcprotocol
+
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializer
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+
+@Serializer(forClass = Int::class)
+object VarIntSerializer : KSerializer<Int> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("VarInt", PrimitiveKind.INT)
+
+    override fun serialize(encoder: Encoder, value: Int) {
+        val bytes = VarInt.encode(value)
+        (encoder as MinecraftPacketEncoder).writeBytes(bytes)
+    }
+
+    override fun deserialize(decoder: Decoder): Int {
+        return (decoder as MinecraftPacketDecoder).decodeInt()
+    }
+}

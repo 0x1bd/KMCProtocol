@@ -4,6 +4,7 @@ import de.kvxd.kmcprotocol.datatypes.varint.VarInt
 import io.ktor.utils.io.core.*
 import kotlinx.io.Sink
 import kotlinx.io.Source
+import kotlinx.io.readByteArray
 import kotlin.text.toByteArray
 
 
@@ -36,7 +37,7 @@ object MinecraftTypes {
 
     fun readString(source: Source): String {
         val length = readVarInt(source)
-        val bytes = source.readBytes(length)
+        val bytes = source.readByteArray(length)
         return bytes.toString(Charsets.UTF_8)
     }
 }

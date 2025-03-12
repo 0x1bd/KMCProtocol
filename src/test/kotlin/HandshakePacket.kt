@@ -1,8 +1,16 @@
-import de.kvxd.kmcprotocol.Packet
+import de.kvxd.kmcprotocol.Direction
+import de.kvxd.kmcprotocol.MinecraftPacket
+import de.kvxd.kmcprotocol.ProtocolState
 import de.kvxd.kmcprotocol.datatypes.varint.VarIntSerializer
+import de.kvxd.kmcprotocol.registry.PacketMetadata
 import kotlinx.serialization.Serializable
 
 @Serializable
+@PacketMetadata(
+    id = 0x00,
+    direction = Direction.C2S,
+    state = ProtocolState.HANDSHAKE
+)
 data class HandshakePacket(
     @Serializable(with = VarIntSerializer::class)
     val protocolVersion: Int,
@@ -10,6 +18,4 @@ data class HandshakePacket(
     val serverPort: Short,
     @Serializable(with = VarIntSerializer::class)
     val nextState: Int
-) : Packet {
-    override val packetId: Int = 0x00
-}
+) : MinecraftPacket

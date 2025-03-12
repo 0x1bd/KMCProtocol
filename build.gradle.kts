@@ -14,6 +14,9 @@ dependencies {
     implementation(libs.ktor.network)
     implementation(libs.ktor.network.tls)
 
+
+    implementation(libs.kotlin.reflect)
+
     testImplementation(kotlin("test"))
 }
 

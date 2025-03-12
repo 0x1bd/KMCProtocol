@@ -1,18 +1,23 @@
 package de.kvxd.kmcprotocol.serialization
 
+import de.kvxd.kmcprotocol.MinecraftPacket
+import de.kvxd.kmcprotocol.MinecraftProtocol
 import de.kvxd.kmcprotocol.MinecraftTypes
-import de.kvxd.kmcprotocol.Packet
 import de.kvxd.kmcprotocol.datatypes.varint.VarInt
 import io.ktor.utils.io.core.*
+import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.serializer
 
 
 object PacketSerializer {
-    inline fun <reified T : Packet> serialize(packet: T): ByteArray {
+
+    inline fun <reified T : MinecraftPacket> serialize(protocol: MinecraftProtocol, packet: T): ByteArray {
         val encoder = MinecraftPacketEncoder()
 
+        val id = protocol.registry.getPacketID(packet::class)
+
         // Write packet ID first
-        encoder.writeBytes(VarInt.encode(packet.packetId))
+        encoder.writeBytes(VarInt.encode(id))
 
         // Serialize the packet content
         serializer<T>().serialize(encoder, packet)
@@ -29,12 +34,21 @@ object PacketSerializer {
         return packetBytes.readBytes()
     }
 
-    inline fun <reified T : Packet> deserialize(bytes: ByteArray): T {
+    @OptIn(InternalSerializationApi::class)
+    fun deserialize(protocol: MinecraftProtocol, bytes: ByteArray): MinecraftPacket? {
         val packet = ByteReadPacket(bytes)
         val length = MinecraftTypes.readVarInt(packet)
         val packetId = MinecraftTypes.readVarInt(packet)
 
+        val packetClass = protocol.registry.getPacketClassById(packetId).serializer()
+
         val decoder = MinecraftPacketDecoder(packet)
-        return kotlinx.serialization.serializer<T>().deserialize(decoder)
+        val p = packetClass.deserialize(decoder)
+
+        if (protocol.registry.getPacketMetadata(p::class).state != protocol.state) {
+            return null
+        }
+
+        return p
     }
 }

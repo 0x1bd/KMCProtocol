@@ -1,5 +1,6 @@
-package de.kvxd.kmcprotocol
+package de.kvxd.kmcprotocol.serialization
 
+import de.kvxd.kmcprotocol.MinecraftTypes
 import io.ktor.utils.io.core.*
 import kotlinx.io.readDouble
 import kotlinx.io.readFloat
@@ -21,7 +22,7 @@ class MinecraftPacketDecoder(private val packet: ByteReadPacket) : AbstractDecod
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder = this
 
     override fun decodeString(): String {
-        return ByteBufferUtils.readString(packet)
+        return MinecraftTypes.readString(packet)
     }
 
     override fun decodeShort(): Short {
@@ -29,7 +30,7 @@ class MinecraftPacketDecoder(private val packet: ByteReadPacket) : AbstractDecod
     }
 
     override fun decodeInt(): Int {
-        return ByteBufferUtils.readVarInt(packet)
+        return MinecraftTypes.readVarInt(packet)
     }
 
     override fun decodeByte(): Byte = packet.readByte()
@@ -45,6 +46,6 @@ class MinecraftPacketDecoder(private val packet: ByteReadPacket) : AbstractDecod
     override fun decodeSequentially(): Boolean = true
 
     override fun decodeCollectionSize(descriptor: SerialDescriptor): Int {
-        return ByteBufferUtils.readVarInt(packet)
+        return MinecraftTypes.readVarInt(packet)
     }
 }

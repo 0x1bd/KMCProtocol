@@ -1,5 +1,6 @@
-package de.kvxd.kmcprotocol
+package de.kvxd.kmcprotocol.serialization
 
+import de.kvxd.kmcprotocol.datatypes.varint.VarInt
 import io.ktor.utils.io.core.*
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.modules.SerializersModule

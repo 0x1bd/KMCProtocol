@@ -1,4 +1,4 @@
-package de.kvxd.kmcprotocol
+package de.kvxd.kmcprotocol.datatypes.varint
 
 object VarInt {
 

@@ -1,5 +1,5 @@
 import de.kvxd.kmcprotocol.Packet
-import de.kvxd.kmcprotocol.VarIntSerializer
+import de.kvxd.kmcprotocol.datatypes.varint.VarIntSerializer
 import kotlinx.serialization.Serializable
 
 @Serializable

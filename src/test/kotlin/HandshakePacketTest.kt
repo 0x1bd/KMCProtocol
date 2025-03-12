@@ -1,5 +1,6 @@
-import de.kvxd.kmcprotocol.PacketSerializer
-import kotlin.test.*
+import de.kvxd.kmcprotocol.serialization.PacketSerializer
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 class HandshakePacketTest {
     @Test

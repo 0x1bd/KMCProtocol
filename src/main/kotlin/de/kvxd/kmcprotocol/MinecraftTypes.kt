@@ -1,12 +1,13 @@
 package de.kvxd.kmcprotocol
 
+import de.kvxd.kmcprotocol.datatypes.varint.VarInt
 import io.ktor.utils.io.core.*
 import kotlinx.io.Sink
 import kotlinx.io.Source
 import kotlin.text.toByteArray
 
 
-object ByteBufferUtils {
+object MinecraftTypes {
 
     fun writeVarInt(sink: Sink, value: Int) {
         val bytes = VarInt.encode(value)

@@ -1,5 +1,7 @@
-package de.kvxd.kmcprotocol
+package de.kvxd.kmcprotocol.datatypes.varint
 
+import de.kvxd.kmcprotocol.serialization.MinecraftPacketDecoder
+import de.kvxd.kmcprotocol.serialization.MinecraftPacketEncoder
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor

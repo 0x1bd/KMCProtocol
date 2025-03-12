@@ -1,13 +1,14 @@
 package de.kvxd.kmcprotocol
 
-import kotlinx.serialization.DeserializationStrategy
+import io.ktor.utils.io.core.*
+import kotlinx.io.readDouble
+import kotlinx.io.readFloat
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.AbstractDecoder
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.modules.SerializersModule
-import java.nio.ByteBuffer
 
-class MinecraftPacketDecoder(private val buffer: ByteBuffer) : AbstractDecoder() {
+class MinecraftPacketDecoder(private val packet: ByteReadPacket) : AbstractDecoder() {
     override val serializersModule: SerializersModule = SerializersModule {}
 
     private var elementIndex = 0
@@ -20,30 +21,30 @@ class MinecraftPacketDecoder(private val buffer: ByteBuffer) : AbstractDecoder()
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder = this
 
     override fun decodeString(): String {
-        return ByteBufferUtils.readString(buffer)
+        return ByteBufferUtils.readString(packet)
     }
 
     override fun decodeShort(): Short {
-        return buffer.short
+        return packet.readShort()
     }
 
     override fun decodeInt(): Int {
-        return ByteBufferUtils.readVarInt(buffer)
+        return ByteBufferUtils.readVarInt(packet)
     }
 
-    override fun decodeByte(): Byte = buffer.get()
+    override fun decodeByte(): Byte = packet.readByte()
 
-    override fun decodeBoolean(): Boolean = buffer.get() != 0.toByte()
+    override fun decodeBoolean(): Boolean = packet.readByte() != 0.toByte()
 
-    override fun decodeLong(): Long = buffer.long
+    override fun decodeLong(): Long = packet.readLong()
 
-    override fun decodeFloat(): Float = buffer.float
+    override fun decodeFloat(): Float = packet.readFloat()
 
-    override fun decodeDouble(): Double = buffer.double
+    override fun decodeDouble(): Double = packet.readDouble()
 
     override fun decodeSequentially(): Boolean = true
 
     override fun decodeCollectionSize(descriptor: SerialDescriptor): Int {
-        return ByteBufferUtils.readVarInt(buffer)
+        return ByteBufferUtils.readVarInt(packet)
     }
 }

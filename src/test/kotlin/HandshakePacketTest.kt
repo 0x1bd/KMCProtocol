@@ -1,4 +1,3 @@
-import de.kvxd.kmcprotocol.HandshakePacket
 import de.kvxd.kmcprotocol.PacketSerializer
 import kotlin.test.*
 

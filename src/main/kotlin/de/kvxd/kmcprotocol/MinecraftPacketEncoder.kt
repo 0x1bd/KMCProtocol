@@ -1,33 +1,33 @@
 package de.kvxd.kmcprotocol
 
+import io.ktor.utils.io.core.*
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.modules.SerializersModule
-import java.nio.ByteBuffer
+import kotlin.text.toByteArray
+
 
 class MinecraftPacketEncoder : AbstractEncoder() {
-    private val buffer = ByteBuffer.allocate(1024) // You might want to make this dynamic
+
+    private val builder = BytePacketBuilder()
 
     override val serializersModule: SerializersModule = SerializersModule {}
 
     fun writeBytes(bytes: ByteArray) {
-        buffer.put(bytes)
+        builder.writeFully(bytes)
     }
 
     fun writeString(value: String) {
         val bytes = value.toByteArray(Charsets.UTF_8)
-        buffer.put(VarInt.encode(bytes.size))
-        buffer.put(bytes)
+        builder.writeFully(VarInt.encode(bytes.size))
+        builder.writeFully(bytes)
     }
 
     fun writeShort(value: Short) {
-        buffer.putShort(value)
+        builder.writeShort(value)
     }
 
     fun getBytes(): ByteArray {
-        buffer.flip()
-        val result = ByteArray(buffer.remaining())
-        buffer.get(result)
-        return result
+        return builder.build().readBytes()
     }
 
     override fun encodeString(value: String) {

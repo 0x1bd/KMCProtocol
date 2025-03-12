@@ -1,7 +1,6 @@
-package de.kvxd.kmcprotocol
-
+import de.kvxd.kmcprotocol.Packet
+import de.kvxd.kmcprotocol.VarIntSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerialName
 
 @Serializable
 data class HandshakePacket(

@@ -3,12 +3,13 @@ import de.kvxd.kmcprotocol.Direction
 import de.kvxd.kmcprotocol.MinecraftPacket
 import de.kvxd.kmcprotocol.MinecraftProtocol
 import de.kvxd.kmcprotocol.ProtocolState
-import de.kvxd.kmcprotocol.datatypes.VarLong
+import de.kvxd.kmcprotocol.datatypes.Identifier
 import de.kvxd.kmcprotocol.network.TCPClient
 import de.kvxd.kmcprotocol.registry.PacketMetadata
 import de.kvxd.kmcprotocol.registry.PacketRegistry
 import de.kvxd.kmcprotocol.serialization.PacketSerializer
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import kotlin.test.Test
 
@@ -19,9 +20,8 @@ import kotlin.test.Test
     state = ProtocolState.HANDSHAKE
 )
 data class TestPacket(
-    @Serializable(with = VarLong.Serializer::class)
-    val foo: Long,
-    val bar: String
+    @Contextual
+    val foo: Identifier
 ) : MinecraftPacket
 
 class ClientTest {
@@ -35,8 +35,7 @@ class ClientTest {
         client.connect()
 
         val packet = TestPacket(
-            -9223372036854775807L,
-            "BOB"
+            Identifier.of("my_identifier_path")
         )
 
         protocol.registry = PacketRegistry.create(protocol) {

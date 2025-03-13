@@ -2,11 +2,13 @@ package de.kvxd.kmcprotocol.serialization
 
 import de.kvxd.kmcprotocol.datatypes.varint.VarInt
 import io.ktor.utils.io.core.*
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.modules.SerializersModule
 import kotlin.text.toByteArray
 
 
+@OptIn(ExperimentalSerializationApi::class)
 class MinecraftPacketEncoder : AbstractEncoder() {
 
     private val builder = BytePacketBuilder()

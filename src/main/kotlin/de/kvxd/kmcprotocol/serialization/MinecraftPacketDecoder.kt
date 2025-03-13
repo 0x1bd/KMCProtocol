@@ -11,11 +11,12 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.AbstractDecoder
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.modules.SerializersModule
+import java.util.*
 
 @OptIn(ExperimentalSerializationApi::class)
 
 class MinecraftPacketDecoder(private val packet: Source) : AbstractDecoder() {
-    override val serializersModule: SerializersModule = SerializersModule {}
+    override val serializersModule: SerializersModule = PacketSerializer.serializersModule
 
     private var elementIndex = 0
 
@@ -46,6 +47,10 @@ class MinecraftPacketDecoder(private val packet: Source) : AbstractDecoder() {
 
     fun decodeVarLong(): Long {
         return VarLong.decode(packet)
+    }
+
+    fun decodeUUID(): UUID {
+        return UUID(decodeLong(), decodeLong())
     }
 
     override fun decodeByte(): Byte = packet.readByte()

@@ -2,14 +2,21 @@ package de.kvxd.kmcprotocol.serialization
 
 import de.kvxd.kmcprotocol.MinecraftPacket
 import de.kvxd.kmcprotocol.MinecraftProtocol
+import de.kvxd.kmcprotocol.datatypes.UuidSerializer
 import de.kvxd.kmcprotocol.datatypes.VarInt
 import io.ktor.utils.io.core.*
 import kotlinx.io.readByteArray
 import kotlinx.serialization.InternalSerializationApi
+import kotlinx.serialization.modules.SerializersModule
+import kotlinx.serialization.modules.contextual
 import kotlinx.serialization.serializer
 
 
 object PacketSerializer {
+
+    val serializersModule = SerializersModule {
+        contextual(UuidSerializer)
+    }
 
     inline fun <reified T : MinecraftPacket> serialize(protocol: MinecraftProtocol, packet: T): ByteArray {
         val encoder = MinecraftPacketEncoder()

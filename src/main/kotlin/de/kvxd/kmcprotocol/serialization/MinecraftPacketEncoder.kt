@@ -9,6 +9,7 @@ import kotlinx.io.writeFloat
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.modules.SerializersModule
+import java.util.*
 import kotlin.text.toByteArray
 
 
@@ -17,7 +18,7 @@ class MinecraftPacketEncoder : AbstractEncoder() {
 
     private val builder = BytePacketBuilder()
 
-    override val serializersModule: SerializersModule = SerializersModule {}
+    override val serializersModule: SerializersModule = PacketSerializer.serializersModule
 
     fun writeBytes(bytes: ByteArray) {
         builder.writeFully(bytes)
@@ -47,6 +48,11 @@ class MinecraftPacketEncoder : AbstractEncoder() {
 
     fun encodeVarLong(varLong: Long) {
         writeBytes(VarLong.encode(varLong))
+    }
+
+    fun encodeUUID(uuid: UUID) {
+        encodeLong(uuid.mostSignificantBits)
+        encodeLong(uuid.leastSignificantBits)
     }
 
     override fun encodeByte(value: Byte) {

@@ -4,6 +4,7 @@ import de.kvxd.kmcprotocol.MinecraftPacket
 import de.kvxd.kmcprotocol.MinecraftProtocol
 import de.kvxd.kmcprotocol.datatypes.VarInt
 import io.ktor.utils.io.core.*
+import kotlinx.io.readByteArray
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.serializer
 
@@ -30,7 +31,7 @@ object PacketSerializer {
             writeFully(contentBytes)
         }
 
-        return packetBytes.readBytes()
+        return packetBytes.readByteArray()
     }
 
     @OptIn(InternalSerializationApi::class)

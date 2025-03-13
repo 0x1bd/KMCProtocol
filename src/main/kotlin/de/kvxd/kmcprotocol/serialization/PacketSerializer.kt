@@ -2,8 +2,7 @@ package de.kvxd.kmcprotocol.serialization
 
 import de.kvxd.kmcprotocol.MinecraftPacket
 import de.kvxd.kmcprotocol.MinecraftProtocol
-import de.kvxd.kmcprotocol.MinecraftTypes
-import de.kvxd.kmcprotocol.datatypes.varint.VarInt
+import de.kvxd.kmcprotocol.datatypes.VarInt
 import io.ktor.utils.io.core.*
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.serializer
@@ -37,8 +36,8 @@ object PacketSerializer {
     @OptIn(InternalSerializationApi::class)
     fun deserialize(protocol: MinecraftProtocol, bytes: ByteArray): MinecraftPacket? {
         val packet = ByteReadPacket(bytes)
-        val length = MinecraftTypes.readVarInt(packet)
-        val packetId = MinecraftTypes.readVarInt(packet)
+        val length = VarInt.decode(packet)
+        val packetId = VarInt.decode(packet)
 
         val packetClass = protocol.registry.getPacketClassById(packetId).serializer()
 

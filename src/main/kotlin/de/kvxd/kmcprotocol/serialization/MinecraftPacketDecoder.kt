@@ -1,6 +1,7 @@
 package de.kvxd.kmcprotocol.serialization
 
 import de.kvxd.kmcprotocol.MinecraftTypes
+import de.kvxd.kmcprotocol.datatypes.VarInt
 import kotlinx.io.Source
 import kotlinx.io.readDouble
 import kotlinx.io.readFloat
@@ -33,7 +34,11 @@ class MinecraftPacketDecoder(private val packet: Source) : AbstractDecoder() {
     }
 
     override fun decodeInt(): Int {
-        return MinecraftTypes.readVarInt(packet)
+        return packet.readInt()
+    }
+
+    fun decodeVarInt(): Int {
+        return VarInt.decode(packet)
     }
 
     override fun decodeByte(): Byte = packet.readByte()
@@ -49,6 +54,6 @@ class MinecraftPacketDecoder(private val packet: Source) : AbstractDecoder() {
     override fun decodeSequentially(): Boolean = true
 
     override fun decodeCollectionSize(descriptor: SerialDescriptor): Int {
-        return MinecraftTypes.readVarInt(packet)
+        return VarInt.decode(packet)
     }
 }

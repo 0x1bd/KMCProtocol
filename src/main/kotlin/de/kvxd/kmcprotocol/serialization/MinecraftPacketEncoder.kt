@@ -1,6 +1,6 @@
 package de.kvxd.kmcprotocol.serialization
 
-import de.kvxd.kmcprotocol.datatypes.varint.VarInt
+import de.kvxd.kmcprotocol.datatypes.VarInt
 import io.ktor.utils.io.core.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encoding.AbstractEncoder
@@ -19,29 +19,36 @@ class MinecraftPacketEncoder : AbstractEncoder() {
         builder.writeFully(bytes)
     }
 
-    fun writeString(value: String) {
-        val bytes = value.toByteArray(Charsets.UTF_8)
-        builder.writeFully(VarInt.encode(bytes.size))
-        builder.writeFully(bytes)
-    }
-
-    fun writeShort(value: Short) {
-        builder.writeShort(value)
-    }
-
     fun getBytes(): ByteArray {
         return builder.build().readBytes()
     }
 
     override fun encodeString(value: String) {
-        writeString(value)
+        val bytes = value.toByteArray(Charsets.UTF_8)
+        builder.writeFully(VarInt.encode(bytes.size))
+        builder.writeFully(bytes)
     }
 
     override fun encodeShort(value: Short) {
-        writeShort(value)
+       builder.writeShort(value)
     }
 
     override fun encodeInt(value: Int) {
-        writeBytes(VarInt.encode(value))
+        builder.writeInt(value)
+    }
+
+    fun encodeVarInt(varInt: Int) {
+        writeBytes(VarInt.encode(varInt))
+    }
+
+    override fun encodeByte(value: Byte) {
+        builder.writeByte(value)
+    }
+
+    override fun encodeBoolean(value: Boolean) {
+        if (value)
+            builder.writeByte(0x01)
+        else
+            builder.writeByte(0x00)
     }
 }

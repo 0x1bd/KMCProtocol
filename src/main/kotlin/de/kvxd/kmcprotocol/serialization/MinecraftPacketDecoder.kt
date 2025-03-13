@@ -1,7 +1,7 @@
 package de.kvxd.kmcprotocol.serialization
 
 import de.kvxd.kmcprotocol.MinecraftTypes
-import io.ktor.utils.io.core.*
+import kotlinx.io.Source
 import kotlinx.io.readDouble
 import kotlinx.io.readFloat
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -12,7 +12,7 @@ import kotlinx.serialization.modules.SerializersModule
 
 @OptIn(ExperimentalSerializationApi::class)
 
-class MinecraftPacketDecoder(private val packet: ByteReadPacket) : AbstractDecoder() {
+class MinecraftPacketDecoder(private val packet: Source) : AbstractDecoder() {
     override val serializersModule: SerializersModule = SerializersModule {}
 
     private var elementIndex = 0

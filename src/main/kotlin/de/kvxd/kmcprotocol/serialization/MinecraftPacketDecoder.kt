@@ -1,8 +1,9 @@
 package de.kvxd.kmcprotocol.serialization
 
-import de.kvxd.kmcprotocol.MinecraftTypes
 import de.kvxd.kmcprotocol.datatypes.VarInt
+import de.kvxd.kmcprotocol.datatypes.VarLong
 import kotlinx.io.Source
+import kotlinx.io.readByteArray
 import kotlinx.io.readDouble
 import kotlinx.io.readFloat
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -26,7 +27,9 @@ class MinecraftPacketDecoder(private val packet: Source) : AbstractDecoder() {
     override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder = this
 
     override fun decodeString(): String {
-        return MinecraftTypes.readString(packet)
+        val length = VarInt.decode(packet)
+        val bytes = packet.readByteArray(length)
+        return bytes.toString(Charsets.UTF_8)
     }
 
     override fun decodeShort(): Short {
@@ -39,6 +42,10 @@ class MinecraftPacketDecoder(private val packet: Source) : AbstractDecoder() {
 
     fun decodeVarInt(): Int {
         return VarInt.decode(packet)
+    }
+
+    fun decodeVarLong(): Long {
+        return VarLong.decode(packet)
     }
 
     override fun decodeByte(): Byte = packet.readByte()

@@ -10,19 +10,23 @@ class PacketRegistry(val protocol: MinecraftProtocol) {
     private val packets = mutableMapOf<KClass<out MinecraftPacket>, PacketMetadata>()
 
     fun registerPacket(packetKClass: KClass<out MinecraftPacket>) {
-        packets[packetKClass] = getPacketMetadata(packetKClass)
-    }
-
-    fun getPacketMetadata(packetKClass: KClass<out MinecraftPacket>): PacketMetadata {
         val annotations = packetKClass.findAnnotations<PacketMetadata>()
 
         if (annotations.isEmpty()) {
             throw IllegalStateException("Packet class $packetKClass is missing PacketMetadata annotation")
         }
 
-        return annotations.firstOrNull { metadata ->
+        packets[packetKClass] = annotations.firstOrNull { metadata ->
             metadata.state == protocol.state
         } ?: throw IllegalStateException("Packet $packetKClass does not support state ${protocol.state}. Expecting ${annotations.first().state}")
+    }
+
+    fun getPacketMetadata(packetKClass: KClass<out MinecraftPacket>): PacketMetadata {
+        val metadata = packets[packetKClass] ?: throw IllegalArgumentException("Packet $packetKClass has not been registered.")
+
+        if (metadata.state != protocol.state) throw IllegalStateException("Protocol state ${protocol.state} does not match the expected state for packet $packetKClass")
+
+        return metadata
     }
 
     fun getPacketID(packetKClass: KClass<out MinecraftPacket>): Int {

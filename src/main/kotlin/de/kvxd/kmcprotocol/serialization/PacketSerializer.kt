@@ -13,6 +13,7 @@ object PacketSerializer {
 
     inline fun <reified T : MinecraftPacket> serialize(protocol: MinecraftProtocol, packet: T): ByteArray {
         val encoder = MinecraftPacketEncoder()
+        println("Serializing: ${packet::class}")
 
         val id = protocol.registry.getPacketID(packet::class)
 

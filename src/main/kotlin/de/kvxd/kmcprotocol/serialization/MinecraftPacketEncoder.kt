@@ -1,7 +1,11 @@
 package de.kvxd.kmcprotocol.serialization
 
 import de.kvxd.kmcprotocol.datatypes.VarInt
+import de.kvxd.kmcprotocol.datatypes.VarLong
 import io.ktor.utils.io.core.*
+import kotlinx.io.readByteArray
+import kotlinx.io.writeDouble
+import kotlinx.io.writeFloat
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.modules.SerializersModule
@@ -20,7 +24,7 @@ class MinecraftPacketEncoder : AbstractEncoder() {
     }
 
     fun getBytes(): ByteArray {
-        return builder.build().readBytes()
+        return builder.build().readByteArray()
     }
 
     override fun encodeString(value: String) {
@@ -41,6 +45,10 @@ class MinecraftPacketEncoder : AbstractEncoder() {
         writeBytes(VarInt.encode(varInt))
     }
 
+    fun encodeVarLong(varLong: Long) {
+        writeBytes(VarLong.encode(varLong))
+    }
+
     override fun encodeByte(value: Byte) {
         builder.writeByte(value)
     }
@@ -50,5 +58,17 @@ class MinecraftPacketEncoder : AbstractEncoder() {
             builder.writeByte(0x01)
         else
             builder.writeByte(0x00)
+    }
+
+    override fun encodeLong(value: Long) {
+        builder.writeLong(value)
+    }
+
+    override fun encodeFloat(value: Float) {
+        builder.writeFloat(value)
+    }
+
+    override fun encodeDouble(value: Double) {
+        builder.writeDouble(value)
     }
 }

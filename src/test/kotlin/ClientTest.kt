@@ -14,7 +14,7 @@ import kotlin.test.Test
 
 @Serializable
 @PacketMetadata(
-    id = 0x01,
+    id = 0x00,
     direction = Direction.C2S,
     state = ProtocolState.HANDSHAKE
 )
@@ -35,7 +35,7 @@ class ClientTest {
         client.connect()
 
         val packet = TestPacket(
-            69,
+            -9223372036854775807L,
             "BOB"
         )
 

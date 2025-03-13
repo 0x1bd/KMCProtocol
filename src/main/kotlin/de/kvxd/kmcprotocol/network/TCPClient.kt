@@ -23,7 +23,7 @@ class TCPClient(private val host: String, private val port: Int) {
         }
     }
 
-    suspend fun close() = withContext(Dispatchers.IO) {
+    suspend fun disconnect() = withContext(Dispatchers.IO) {
         socket?.close()
         selectorManager.close()
     }

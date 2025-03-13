@@ -30,7 +30,7 @@ class ClientTest {
 
         client.sendPacket(serialized)
 
-        client.close()
+        client.disconnect()
     }
 
 }

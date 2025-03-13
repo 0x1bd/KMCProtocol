@@ -17,7 +17,7 @@ object PacketSerializer {
         val id = protocol.registry.getPacketID(packet::class)
 
         // Write packet ID first
-        encoder.writeBytes(VarInt.encode(id))
+        encoder.encodeVarInt(id)
 
         // Serialize the packet content
         serializer<T>().serialize(encoder, packet)

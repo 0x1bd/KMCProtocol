@@ -14,17 +14,23 @@ const val DEFAULT_NAMESPACE = "minecraft"
 @Serializable(with = Identifier.Serializer::class)
 class Identifier private constructor(private val namespace: String, private val path: String) {
 
+    private val combined
+        get() = namespace + NAMESPACE_SEPARATOR + path
+
     companion object {
-
         fun of(namespace: String, path: String): Identifier =
-            Identifier(namespace, path)
+            Identifier(namespace, path).validate()
 
-        fun of(path: String): Identifier =
-            Identifier(DEFAULT_NAMESPACE, path)
+        fun of(path: String): Identifier {
+            if (path.contains(NAMESPACE_SEPARATOR))
+                return fromString(path)
+
+            return of(DEFAULT_NAMESPACE, path).validate()
+        }
 
         fun fromString(string: String): Identifier {
             val namespacePath = string.split(NAMESPACE_SEPARATOR)
-            return of(namespacePath[0], namespacePath[1])
+            return of(namespacePath[0], namespacePath[1]).validate()
         }
     }
 
@@ -38,12 +44,14 @@ class Identifier private constructor(private val namespace: String, private val 
         }
 
         override fun deserialize(decoder: Decoder): Identifier =
-            fromString(decoder.decodeString())
+            fromString(decoder.decodeString()).validate()
     }
 
-    override fun toString(): String =
-        (namespace + NAMESPACE_SEPARATOR + path).apply {
-            if (this.length >= 32767) throw IllegalArgumentException("Identifiers' max length is 32767")
-        }
+    override fun toString(): String = combined
+
+    private fun validate(): Identifier {
+        if (this.combined.length >= 32767) throw IllegalArgumentException("Identifiers' max length is 32767")
+        return this
+    }
 
 }

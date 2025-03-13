@@ -9,7 +9,6 @@ import de.kvxd.kmcprotocol.registry.PacketMetadata
 import de.kvxd.kmcprotocol.registry.PacketRegistry
 import de.kvxd.kmcprotocol.serialization.PacketSerializer
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import kotlin.test.Test
 
@@ -20,7 +19,6 @@ import kotlin.test.Test
     state = ProtocolState.HANDSHAKE
 )
 data class TestPacket(
-    @Contextual
     val foo: Identifier
 ) : MinecraftPacket
 

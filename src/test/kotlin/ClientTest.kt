@@ -3,14 +3,13 @@ import de.kvxd.kmcprotocol.Direction
 import de.kvxd.kmcprotocol.MinecraftPacket
 import de.kvxd.kmcprotocol.MinecraftProtocol
 import de.kvxd.kmcprotocol.ProtocolState
+import de.kvxd.kmcprotocol.datatypes.Vec3
 import de.kvxd.kmcprotocol.network.KMCClient
 import de.kvxd.kmcprotocol.registry.PacketMetadata
 import de.kvxd.kmcprotocol.registry.PacketRegistry
 import de.kvxd.kmcprotocol.serialization.PacketSerializer
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
-import net.kyori.adventure.text.Component
 import kotlin.test.Test
 
 @Serializable
@@ -20,8 +19,7 @@ import kotlin.test.Test
     state = ProtocolState.HANDSHAKE
 )
 data class TestPacket(
-    @Contextual
-    val foo: Component
+    val foo: Vec3
 ) : MinecraftPacket
 
 class ClientTest {
@@ -35,7 +33,7 @@ class ClientTest {
         client.connect()
 
         val packet = TestPacket(
-            Component.text("Hello, World")
+            Vec3(0.0, 1.0, 65.0)
         )
 
         protocol.registry = PacketRegistry.create(protocol) {

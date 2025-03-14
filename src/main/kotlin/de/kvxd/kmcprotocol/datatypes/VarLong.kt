@@ -1,14 +1,12 @@
 package de.kvxd.kmcprotocol.datatypes
 
+import de.kvxd.kmcprotocol.serialization.KMCSerializer
 import de.kvxd.kmcprotocol.serialization.MinecraftPacketDecoder
 import de.kvxd.kmcprotocol.serialization.MinecraftPacketEncoder
 import kotlinx.io.Source
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 
 class VarLong {
 
@@ -44,23 +42,17 @@ class VarLong {
         }
     }
 
-    object Serializer: KSerializer<Long> {
+    object Serializer : KMCSerializer<Long>() {
 
         override val descriptor: SerialDescriptor
             get() = PrimitiveSerialDescriptor("VarLong", PrimitiveKind.LONG)
 
-        override fun serialize(encoder: Encoder, value: Long) {
-            if (encoder is MinecraftPacketEncoder)
-                encoder.encodeVarLong(value)
-            else
-                throw IllegalArgumentException("Unsupported encoder")
+        override fun serialize(encoder: MinecraftPacketEncoder, value: Long) {
+            encoder.encodeVarLong(value)
         }
 
-        override fun deserialize(decoder: Decoder): Long {
-            if (decoder is MinecraftPacketDecoder)
-                return decoder.decodeVarLong()
-            else
-                throw IllegalArgumentException("Unsupported decoder")
+        override fun deserialize(decoder: MinecraftPacketDecoder): Long {
+            return decoder.decodeVarLong()
         }
     }
 }

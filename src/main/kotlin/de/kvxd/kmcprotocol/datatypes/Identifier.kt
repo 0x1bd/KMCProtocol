@@ -1,12 +1,12 @@
 package de.kvxd.kmcprotocol.datatypes
 
-import kotlinx.serialization.KSerializer
+import de.kvxd.kmcprotocol.serialization.KMCSerializer
+import de.kvxd.kmcprotocol.serialization.MinecraftPacketDecoder
+import de.kvxd.kmcprotocol.serialization.MinecraftPacketEncoder
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 
 const val NAMESPACE_SEPARATOR = ":"
 const val DEFAULT_NAMESPACE = "minecraft"
@@ -34,17 +34,18 @@ class Identifier private constructor(private val namespace: String, private val 
         }
     }
 
-    object Serializer : KSerializer<Identifier> {
+    object Serializer : KMCSerializer<Identifier>() {
 
         override val descriptor: SerialDescriptor
             get() = PrimitiveSerialDescriptor("Identifier", PrimitiveKind.STRING)
 
-        override fun serialize(encoder: Encoder, value: Identifier) {
+        override fun serialize(encoder: MinecraftPacketEncoder, value: Identifier) {
             encoder.encodeString(value.toString())
         }
 
-        override fun deserialize(decoder: Decoder): Identifier =
-            fromString(decoder.decodeString()).validate()
+        override fun deserialize(decoder: MinecraftPacketDecoder): Identifier {
+            return fromString(decoder.decodeString()).validate()
+        }
     }
 
     override fun toString(): String = combined

@@ -3,7 +3,7 @@ import de.kvxd.kmcprotocol.Direction
 import de.kvxd.kmcprotocol.MinecraftPacket
 import de.kvxd.kmcprotocol.MinecraftProtocol
 import de.kvxd.kmcprotocol.ProtocolState
-import de.kvxd.kmcprotocol.network.TCPClient
+import de.kvxd.kmcprotocol.network.KMCClient
 import de.kvxd.kmcprotocol.registry.PacketMetadata
 import de.kvxd.kmcprotocol.registry.PacketRegistry
 import de.kvxd.kmcprotocol.serialization.PacketSerializer
@@ -30,7 +30,7 @@ class ClientTest {
 
     @Test
     fun testConnection() = runBlocking {
-        val client = TCPClient("localhost", 25565)
+        val client = KMCClient("localhost", 25565)
 
         client.connect()
 

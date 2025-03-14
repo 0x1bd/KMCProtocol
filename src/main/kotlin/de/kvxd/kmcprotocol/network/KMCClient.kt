@@ -6,7 +6,7 @@ import io.ktor.utils.io.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class TCPClient(private val host: String, private val port: Int) {
+class KMCClient(private val host: String, private val port: Int) {
 
     private val selectorManager = ActorSelectorManager(Dispatchers.IO)
     private var socket: Socket? = null

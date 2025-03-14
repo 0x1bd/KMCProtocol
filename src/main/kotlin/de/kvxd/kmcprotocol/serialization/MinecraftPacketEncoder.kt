@@ -2,6 +2,8 @@ package de.kvxd.kmcprotocol.serialization
 
 import de.kvxd.kmcprotocol.datatypes.VarInt
 import de.kvxd.kmcprotocol.datatypes.VarLong
+import de.kvxd.kmcprotocol.datatypes.component.ComponentSerializer
+import de.kvxd.kmcprotocol.datatypes.component.NbtComponentSerializer
 import io.ktor.utils.io.core.*
 import kotlinx.io.readByteArray
 import kotlinx.io.writeDouble
@@ -9,6 +11,9 @@ import kotlinx.io.writeFloat
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.modules.SerializersModule
+import net.kyori.adventure.text.Component
+import org.cloudburstmc.nbt.NBTOutputStream
+import org.cloudburstmc.nbt.NbtType
 import java.util.*
 import kotlin.text.toByteArray
 
@@ -53,6 +58,27 @@ class MinecraftPacketEncoder : AbstractEncoder() {
     fun encodeUUID(uuid: UUID) {
         encodeLong(uuid.mostSignificantBits)
         encodeLong(uuid.leastSignificantBits)
+    }
+
+    fun encodeTag(tag: Any?) {
+        val output = SourceDataOutput(builder)
+
+        if (tag == null) {
+            output.writeByte(0)
+            return
+        }
+
+        val type = NbtType.byClass(tag::class.java)
+        output.writeByte(type.id)
+
+        NBTOutputStream(SourceDataOutput(builder)).writeValue(tag, 512)
+    }
+
+    fun encodeComponent(component: Component) {
+        val json = ComponentSerializer.DEFAULT.serializeToTree(component)
+        val tag = NbtComponentSerializer.jsonComponentToTag(json)
+
+        encodeTag(tag)
     }
 
     override fun encodeByte(value: Byte) {

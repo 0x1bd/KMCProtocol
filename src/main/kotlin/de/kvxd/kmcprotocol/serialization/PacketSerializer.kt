@@ -4,6 +4,7 @@ import de.kvxd.kmcprotocol.MinecraftPacket
 import de.kvxd.kmcprotocol.MinecraftProtocol
 import de.kvxd.kmcprotocol.datatypes.UuidSerializer
 import de.kvxd.kmcprotocol.datatypes.VarInt
+import de.kvxd.kmcprotocol.datatypes.component.ComponentSerializer
 import io.ktor.utils.io.core.*
 import kotlinx.io.readByteArray
 import kotlinx.serialization.InternalSerializationApi
@@ -16,6 +17,7 @@ object PacketSerializer {
 
     val serializersModule = SerializersModule {
         contextual(UuidSerializer)
+        contextual(ComponentSerializer)
     }
 
     inline fun <reified T : MinecraftPacket> serialize(protocol: MinecraftProtocol, packet: T): ByteArray {

@@ -2,6 +2,8 @@ package de.kvxd.kmcprotocol.serialization
 
 import de.kvxd.kmcprotocol.datatypes.VarInt
 import de.kvxd.kmcprotocol.datatypes.VarLong
+import de.kvxd.kmcprotocol.datatypes.component.ComponentSerializer
+import de.kvxd.kmcprotocol.datatypes.component.NbtComponentSerializer
 import kotlinx.io.Source
 import kotlinx.io.readByteArray
 import kotlinx.io.readDouble
@@ -11,6 +13,9 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.AbstractDecoder
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.modules.SerializersModule
+import net.kyori.adventure.text.Component
+import org.cloudburstmc.nbt.NBTInputStream
+import org.cloudburstmc.nbt.NbtType
 import java.util.*
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -51,6 +56,26 @@ class MinecraftPacketDecoder(private val packet: Source) : AbstractDecoder() {
 
     fun decodeUUID(): UUID {
         return UUID(decodeLong(), decodeLong())
+    }
+
+    fun decodeTag(): Any? {
+        val input = SourceDataInput(packet)
+
+        val typeId = input.readUnsignedByte()
+        if (typeId == 0) return null
+
+        val type = NbtType.byId(typeId)
+
+        return NBTInputStream(input).readValue(type, 512)
+    }
+
+    fun decodeComponent(): Component {
+        val tag = decodeTag() ?: throw IllegalArgumentException("Got end-tag when trying to read Component")
+
+        val json = NbtComponentSerializer.tagComponentToJson(tag)
+
+        return ComponentSerializer.DEFAULT
+            .deserializeFromTree(json!!)
     }
 
     override fun decodeByte(): Byte = packet.readByte()

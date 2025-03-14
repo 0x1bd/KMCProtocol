@@ -10,7 +10,7 @@ import de.kvxd.kmcprotocol.serialization.PacketSerializer
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
-import java.util.*
+import net.kyori.adventure.text.Component
 import kotlin.test.Test
 
 @Serializable
@@ -21,7 +21,7 @@ import kotlin.test.Test
 )
 data class TestPacket(
     @Contextual
-    val foo: UUID
+    val foo: Component
 ) : MinecraftPacket
 
 class ClientTest {
@@ -35,7 +35,7 @@ class ClientTest {
         client.connect()
 
         val packet = TestPacket(
-            UUID.randomUUID()
+            Component.text("Hello, World")
         )
 
         protocol.registry = PacketRegistry.create(protocol) {

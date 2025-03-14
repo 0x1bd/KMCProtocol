@@ -15,6 +15,7 @@ dependencies {
     implementation(libs.ktor.network.tls)
 
     implementation(libs.adventure.text.serializer.gson)
+    implementation(libs.cloudburstnbt)
 
     implementation(libs.kotlin.reflect)
 

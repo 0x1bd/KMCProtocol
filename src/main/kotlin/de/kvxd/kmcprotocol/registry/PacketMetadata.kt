@@ -1,6 +1,6 @@
 package de.kvxd.kmcprotocol.registry
 
-import de.kvxd.kmcprotocol.Direction
+import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.ProtocolState
 
 @Retention(AnnotationRetention.RUNTIME)
@@ -10,3 +10,4 @@ annotation class PacketMetadata(
     val direction: Direction,
     val state: ProtocolState
 )
+

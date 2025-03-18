@@ -1,13 +1,17 @@
 [versions]
 kotlin = "2.1.0"
+kotlin-coroutines = "1.10.1"
 ktor = "3.1.1"
 adventure = "4.19.0"
 cloudburstnbt = "3.0.3.Final"
 
 [libraries]
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
+kotlin-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlin-coroutines" }
+
 ktor-network = { module = "io.ktor:ktor-network", version.ref = "ktor" }
 ktor-network-tls = { module = "io.ktor:ktor-network-tls", version.ref = "ktor" }
-kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
+
 adventure-text-serializer-gson = { module = "net.kyori:adventure-text-serializer-gson", version.ref = "adventure" }
 cloudburstnbt = { module = "org.cloudburstmc:nbt", version.ref = "cloudburstnbt" }
 

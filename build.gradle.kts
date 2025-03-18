@@ -18,6 +18,7 @@ dependencies {
     implementation(libs.cloudburstnbt)
 
     implementation(libs.kotlin.reflect)
+    implementation(libs.kotlin.coroutines)
 
     testImplementation(kotlin("test"))
 }

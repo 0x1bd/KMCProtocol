@@ -32,9 +32,9 @@ class PacketCodec<T : MinecraftPacket>(
         private val encoders = mutableListOf<suspend (T, ByteWriteChannel) -> Unit>()
         private val decoders = mutableListOf<suspend (ByteReadChannel) -> Any?>()
 
-        internal fun addCodec(
+        internal fun <E> addCodec(
             encoder: suspend (T, ByteWriteChannel) -> Unit,
-            decoder: suspend (ByteReadChannel) -> Any?
+            decoder: suspend (ByteReadChannel) -> E
         ) {
             encoders.add(encoder)
             decoders.add(decoder)

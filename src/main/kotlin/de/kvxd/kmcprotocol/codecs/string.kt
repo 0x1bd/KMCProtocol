@@ -17,12 +17,12 @@ internal suspend fun ByteReadChannel.readString(): String {
     return bytes.toString(Charsets.UTF_8)
 }
 
-fun <T : MinecraftPacket, P> PacketCodec.PacketCodecBuilder<T>.string(
-    property: KProperty1<T, P>
+fun <T : MinecraftPacket> PacketCodec.PacketCodecBuilder<T>.string(
+    property: KProperty1<T, String>
 ) {
-    addCodec(
+    addCodec<String>(
         encoder = { packet, channel ->
-            val value = property.get(packet) as String
+            val value = property.get(packet)
             channel.writeString(value)
         },
         decoder = { channel -> channel.readString() }

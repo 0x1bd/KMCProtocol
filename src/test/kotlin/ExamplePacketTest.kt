@@ -1,8 +1,7 @@
 
 import de.kvxd.kmcprotocol.MinecraftProtocol
 import de.kvxd.kmcprotocol.ProtocolState
-import de.kvxd.kmcprotocol.codecs.string
-import de.kvxd.kmcprotocol.codecs.varInt
+import de.kvxd.kmcprotocol.codecs.*
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
 import de.kvxd.kmcprotocol.packet.PacketCodec
@@ -10,6 +9,7 @@ import de.kvxd.kmcprotocol.registry.PacketMetadata
 import de.kvxd.kmcprotocol.registry.PacketRegistry
 import io.ktor.utils.io.*
 import kotlinx.coroutines.runBlocking
+import java.util.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -19,15 +19,33 @@ import kotlin.test.assertEquals
     state = ProtocolState.HANDSHAKE
 )
 data class ExamplePacket(
-    var bar: Int,
-    var foobar: String
+    var boolean: Boolean,
+    var byte: Byte,
+    var double: Double,
+    var float: Float,
+    var int: Int,
+    var long: Long,
+    var short: Short,
+    var string: String,
+    var varInt: Int,
+    var varLong: Long,
+    var uuid: UUID
 ) : MinecraftPacket {
 
     companion object {
 
         val CODEC = PacketCodec<ExamplePacket> {
-            varInt(ExamplePacket::bar)
-            string(ExamplePacket::foobar)
+            boolean(ExamplePacket::boolean)
+            byte(ExamplePacket::byte)
+            double(ExamplePacket::double)
+            float(ExamplePacket::float)
+            int(ExamplePacket::int)
+            long(ExamplePacket::long)
+            short(ExamplePacket::short)
+            string(ExamplePacket::string)
+            varInt(ExamplePacket::varInt)
+            varLong(ExamplePacket::varLong)
+            uuid(ExamplePacket::uuid)
         }
     }
 
@@ -35,10 +53,22 @@ data class ExamplePacket(
 
 class ExamplePacketTest {
 
+    private val packet = ExamplePacket(
+        true,
+        0.toByte(),
+        0.0,
+        0f,
+        0,
+        0L,
+        0.toShort(),
+        "Hello, World",
+        0,
+        0L,
+        UUID.randomUUID()
+    )
+
     @Test
     fun `test example packet codec`() = runBlocking {
-        val packet = ExamplePacket(42, "Hello, World!")
-
         val channel = ByteChannel()
 
         ExamplePacket.CODEC.encode(packet, channel)
@@ -55,8 +85,6 @@ class ExamplePacketTest {
         val registry = PacketRegistry.create(protocol) {
             registerPacket(ExamplePacket::class, ExamplePacket.CODEC)
         }
-
-        val packet = ExamplePacket(42, "Hello, World!")
 
         val channel = ByteChannel()
 

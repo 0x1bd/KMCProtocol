@@ -12,6 +12,7 @@ kotlin-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", 
 ktor-network = { module = "io.ktor:ktor-network", version.ref = "ktor" }
 ktor-network-tls = { module = "io.ktor:ktor-network-tls", version.ref = "ktor" }
 
+adventure-nbt = { module = "net.kyori:adventure-nbt", version.ref = "adventure" }
 adventure-text-serializer-gson = { module = "net.kyori:adventure-text-serializer-gson", version.ref = "adventure" }
 cloudburstnbt = { module = "org.cloudburstmc:nbt", version.ref = "cloudburstnbt" }
 

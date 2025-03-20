@@ -1,3 +1,5 @@
+package de.kvxd.kmcprotocol
+
 import de.kvxd.kmcprotocol.codecs.Identifier
 import kotlin.test.Test
 import kotlin.test.assertEquals

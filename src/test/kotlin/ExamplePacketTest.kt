@@ -1,3 +1,4 @@
+
 import de.kvxd.kmcprotocol.MinecraftProtocol
 import de.kvxd.kmcprotocol.ProtocolState
 import de.kvxd.kmcprotocol.codecs.string
@@ -8,6 +9,7 @@ import de.kvxd.kmcprotocol.packet.PacketCodec
 import de.kvxd.kmcprotocol.registry.PacketMetadata
 import de.kvxd.kmcprotocol.registry.PacketRegistry
 import io.ktor.utils.io.*
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -34,7 +36,7 @@ data class ExamplePacket(
 class ExamplePacketTest {
 
     @Test
-    fun `test example packet codec`() {
+    fun `test example packet codec`() = runBlocking {
         val packet = ExamplePacket(42, "Hello, World!")
 
         val channel = ByteChannel()
@@ -47,7 +49,7 @@ class ExamplePacketTest {
     }
 
     @Test
-    fun `test example packet codec with registry`() {
+    fun `test example packet codec with registry`() = runBlocking {
         val protocol = MinecraftProtocol()
 
         val registry = PacketRegistry.create(protocol) {

@@ -6,16 +6,16 @@ import kotlin.reflect.KClass
 import kotlin.reflect.full.primaryConstructor
 
 class PacketCodec<T : MinecraftPacket>(
-    val encode: (T, ByteWriteChannel) -> Unit,
-    val decode: (ByteReadChannel) -> T
+    val encode: suspend (T, ByteWriteChannel) -> Unit,
+    val decode: suspend (ByteReadChannel) -> T
 ) {
 
-    fun encode(packet: MinecraftPacket, channel: ByteWriteChannel) {
+    suspend fun encode(packet: MinecraftPacket, channel: ByteWriteChannel) {
         @Suppress("UNCHECKED_CAST")
         encode.invoke(packet as T, channel)
     }
 
-    fun decode(channel: ByteReadChannel): MinecraftPacket =
+    suspend fun decode(channel: ByteReadChannel): MinecraftPacket =
         decode.invoke(channel)
 
     companion object {
@@ -29,12 +29,12 @@ class PacketCodec<T : MinecraftPacket>(
     }
 
     class PacketCodecBuilder<T : MinecraftPacket>(private val clazz: KClass<T>) {
-        private val encoders = mutableListOf<(T, ByteWriteChannel) -> Unit>()
-        private val decoders = mutableListOf<(ByteReadChannel) -> Any?>()
+        private val encoders = mutableListOf<suspend (T, ByteWriteChannel) -> Unit>()
+        private val decoders = mutableListOf<suspend (ByteReadChannel) -> Any?>()
 
         internal fun addCodec(
-            encoder: (T, ByteWriteChannel) -> Unit,
-            decoder: (ByteReadChannel) -> Any?
+            encoder: suspend (T, ByteWriteChannel) -> Unit,
+            decoder: suspend (ByteReadChannel) -> Any?
         ) {
             encoders.add(encoder)
             decoders.add(decoder)

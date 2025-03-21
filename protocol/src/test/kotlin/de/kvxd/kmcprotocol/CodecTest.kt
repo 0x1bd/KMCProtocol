@@ -1,4 +1,5 @@
 package de.kvxd.kmcprotocol
+
 import de.kvxd.kmcprotocol.codecs.*
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
@@ -35,6 +36,7 @@ data class ExamplePacket(
     var jsonComponent: Component,
     var nbtComponent: Component,
     var styledNbtComponent: Component,
+    var position: Vec3i,
 ) : MinecraftPacket {
 
     companion object {
@@ -54,6 +56,7 @@ data class ExamplePacket(
             json(ExamplePacket::jsonComponent)
             nbt(ExamplePacket::nbtComponent)
             nbt(ExamplePacket::styledNbtComponent)
+            position(ExamplePacket::position)
         }
     }
 
@@ -76,7 +79,8 @@ class CodecTest {
         Component.text("Hello, World"),
         Component.text("Hello, World"),
         Component.text("Hello, World")
-            .style(Style.style(TextColor.color(255, 0, 255), ClickEvent.openUrl("https://0x1bd.github.io")))
+            .style(Style.style(TextColor.color(255, 0, 255), ClickEvent.openUrl("https://0x1bd.github.io"))),
+        Vec3i(42)
     )
 
     @Test

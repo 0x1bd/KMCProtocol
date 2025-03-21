@@ -1,8 +1,8 @@
 package de.kvxd.kmcprotocol.registry
 
 import de.kvxd.kmcprotocol.MinecraftProtocol
+import de.kvxd.kmcprotocol.codec.PacketCodec
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
-import de.kvxd.kmcprotocol.packet.PacketCodec
 import kotlin.reflect.KClass
 import kotlin.reflect.full.findAnnotations
 

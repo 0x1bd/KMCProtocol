@@ -1,9 +1,9 @@
 package de.kvxd.kmcprotocol
 
-import de.kvxd.kmcprotocol.codecs.*
+import de.kvxd.kmcprotocol.codec.PacketCodec
+import de.kvxd.kmcprotocol.codec.codecs.*
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
-import de.kvxd.kmcprotocol.packet.PacketCodec
 import de.kvxd.kmcprotocol.registry.PacketMetadata
 import de.kvxd.kmcprotocol.registry.PacketRegistry
 import io.ktor.utils.io.*
@@ -42,21 +42,21 @@ data class ExamplePacket(
     companion object {
 
         val CODEC = PacketCodec<ExamplePacket> {
-            boolean(ExamplePacket::boolean)
-            byte(ExamplePacket::byte)
-            double(ExamplePacket::double)
-            float(ExamplePacket::float)
-            int(ExamplePacket::int)
-            long(ExamplePacket::long)
-            short(ExamplePacket::short)
-            string(ExamplePacket::string)
-            varInt(ExamplePacket::varInt)
-            varLong(ExamplePacket::varLong)
-            uuid(ExamplePacket::uuid)
-            json(ExamplePacket::jsonComponent)
-            nbt(ExamplePacket::nbtComponent)
-            nbt(ExamplePacket::styledNbtComponent)
-            position(ExamplePacket::position)
+            element(ExamplePacket::boolean, BooleanCodec)
+            element(ExamplePacket::byte, ByteCodec)
+            element(ExamplePacket::double, DoubleCodec)
+            element(ExamplePacket::float, FloatCodec)
+            element(ExamplePacket::int, IntCodec)
+            element(ExamplePacket::long, LongCodec)
+            element(ExamplePacket::short, ShortCodec)
+            element(ExamplePacket::string, StringCodec)
+            element(ExamplePacket::varInt, VarIntCodec)
+            element(ExamplePacket::varLong, VarLongCodec)
+            element(ExamplePacket::uuid, UUIDCodec)
+            element(ExamplePacket::jsonComponent, JsonTextCodec)
+            element(ExamplePacket::nbtComponent, NbtTextCodec)
+            element(ExamplePacket::styledNbtComponent, NbtTextCodec)
+            element(ExamplePacket::position, Vec3iCodec)
         }
     }
 

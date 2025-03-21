@@ -1,8 +1,10 @@
-package de.kvxd.kmcprotocol.packet
+package de.kvxd.kmcprotocol.codec
 
 import de.kvxd.kmcprotocol.flushBlocking
+import de.kvxd.kmcprotocol.packet.MinecraftPacket
 import io.ktor.utils.io.*
 import kotlin.reflect.KClass
+import kotlin.reflect.KProperty1
 import kotlin.reflect.full.primaryConstructor
 
 class PacketCodec<T : MinecraftPacket>(
@@ -32,12 +34,22 @@ class PacketCodec<T : MinecraftPacket>(
         private val encoders = mutableListOf<suspend (T, ByteWriteChannel) -> Unit>()
         private val decoders = mutableListOf<suspend (ByteReadChannel) -> Any?>()
 
-        internal fun <E> addCodec(
+        private fun <E> addCodec(
             encoder: suspend (T, ByteWriteChannel) -> Unit,
             decoder: suspend (ByteReadChannel) -> E
         ) {
             encoders.add(encoder)
             decoders.add(decoder)
+        }
+
+        fun <E> element(
+            property: KProperty1<T, E>,
+            codec: ElementCodec<E>
+        ) {
+            addCodec(
+                encoder = { packet, channel -> codec.encode(channel, property.get(packet)) },
+                decoder = { channel -> codec.decode(channel) }
+            )
         }
 
         fun build(): PacketCodec<T> {

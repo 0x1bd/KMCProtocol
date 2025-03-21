@@ -1,8 +1,7 @@
-package de.kvxd.kmcprotocol.codecs
+package de.kvxd.kmcprotocol.codec.codecs
 
-import de.kvxd.kmcprotocol.packet.MinecraftPacket
-import de.kvxd.kmcprotocol.packet.PacketCodec
-import kotlin.reflect.KProperty1
+import de.kvxd.kmcprotocol.codec.ElementCodec
+import io.ktor.utils.io.*
 
 const val NAMESPACE_SEPARATOR = ":"
 const val DEFAULT_NAMESPACE = "minecraft"
@@ -42,14 +41,13 @@ class Identifier private constructor(private val namespace: String, private val 
 
 }
 
-fun <T : MinecraftPacket> PacketCodec.PacketCodecBuilder<T>.identifier(
-    property: KProperty1<T, Identifier>
-) {
-    addCodec<Identifier>(
-        encoder = { packet, channel ->
-            val value = property.get(packet)
-            channel.writeString(value.toString())
-        },
-        decoder = { channel -> Identifier.of(channel.readString()) }
-    )
+object IdentifierCodec : ElementCodec<Identifier> {
+
+    override suspend fun encode(channel: ByteWriteChannel, value: Identifier) {
+        StringCodec.encode(channel, value.toString())
+    }
+
+    override suspend fun decode(channel: ByteReadChannel): Identifier {
+        return Identifier.of(StringCodec.decode(channel))
+    }
 }

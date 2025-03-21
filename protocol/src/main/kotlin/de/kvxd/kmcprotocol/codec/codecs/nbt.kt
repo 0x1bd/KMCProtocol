@@ -1,17 +1,15 @@
-package de.kvxd.kmcprotocol.codecs
+package de.kvxd.kmcprotocol.codec.codecs
 
 import com.google.gson.*
 import com.google.gson.internal.LazilyParsedNumber
 import de.kvxd.kmcprotocol.asDataInput
 import de.kvxd.kmcprotocol.asDataOutput
-import de.kvxd.kmcprotocol.packet.MinecraftPacket
-import de.kvxd.kmcprotocol.packet.PacketCodec
+import de.kvxd.kmcprotocol.codec.ElementCodec
 import io.ktor.utils.io.*
 import net.kyori.adventure.text.Component
 import org.cloudburstmc.nbt.*
 import java.io.IOException
 import java.util.*
-import kotlin.reflect.KProperty1
 
 /**
  * Kotlin-ified version of [MCProtocolLib's](https://github.com/GeyserMC/MCProtocolLib/blob/148cd197c24e5cf2781a2405e984de54414eec6f/protocol/src/main/java/org/geysermc/mcprotocollib/protocol/codec/NbtComponentSerializer.java#L27) implementation
@@ -301,22 +299,19 @@ suspend fun decodeNBT(channel: ByteReadChannel): Any? {
     }
 }
 
-fun <T : MinecraftPacket> PacketCodec.PacketCodecBuilder<T>.nbt(
-    property: KProperty1<T, Component>
-) {
-    addCodec<Component>(
-        encoder = { packet, channel ->
-            val value = property.get(packet)
-            val json = jsonSerializer.serializeToTree(value)
-            val tag = NbtComponentSerializer.jsonComponentToTag(json)
+object NbtTextCodec : ElementCodec<Component> {
 
-            encodeNBT(channel, tag)
-        },
-        decoder = { channel ->
-            val tag = decodeNBT(channel) ?: throw IllegalArgumentException("Got end-tag when trying to read component")
+    override suspend fun encode(channel: ByteWriteChannel, value: Component) {
+        val json = jsonSerializer.serializeToTree(value)
+        val tag = NbtComponentSerializer.jsonComponentToTag(json)
 
-            val json = NbtComponentSerializer.tagComponentToJson(tag)
-            jsonSerializer.deserializeFromTree(json!!)
-        }
-    )
+        encodeNBT(channel, tag)
+    }
+
+    override suspend fun decode(channel: ByteReadChannel): Component {
+        val tag = decodeNBT(channel) ?: throw IllegalArgumentException("Got end-tag when trying to read component")
+
+        val json = NbtComponentSerializer.tagComponentToJson(tag)
+        return jsonSerializer.deserializeFromTree(json!!)
+    }
 }

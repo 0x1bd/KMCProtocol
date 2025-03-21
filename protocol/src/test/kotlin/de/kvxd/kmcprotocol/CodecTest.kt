@@ -37,7 +37,7 @@ data class ExamplePacket(
     var nbtComponent: Component,
     var styledNbtComponent: Component,
     var position: Vec3i,
-    var intArray: List<Vec3i>
+    var array: List<Vec3i>
 ) : MinecraftPacket {
 
     companion object {
@@ -58,7 +58,7 @@ data class ExamplePacket(
             element(ExamplePacket::nbtComponent, NbtTextCodec)
             element(ExamplePacket::styledNbtComponent, NbtTextCodec)
             element(ExamplePacket::position, Vec3iCodec)
-            element(ExamplePacket::intArray, PrefixedArrayCodec(VarIntCodec, Vec3iCodec))
+            element(ExamplePacket::array, PrefixedArrayCodec(VarIntCodec, Vec3iCodec))
         }
     }
 

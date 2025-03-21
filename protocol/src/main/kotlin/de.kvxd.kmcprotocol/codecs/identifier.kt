@@ -25,7 +25,11 @@ class Identifier private constructor(private val namespace: String, private val 
 
         fun fromString(string: String): Identifier {
             val namespacePath = string.split(NAMESPACE_SEPARATOR)
-            return of(namespacePath[0], namespacePath[1]).validate()
+
+            return if (namespacePath.size == 1)
+                of(DEFAULT_NAMESPACE, string)
+            else
+                of(namespacePath[0], namespacePath[1]).validate()
         }
     }
 

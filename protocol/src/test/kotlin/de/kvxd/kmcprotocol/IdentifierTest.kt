@@ -26,6 +26,12 @@ class IdentifierTest {
     }
 
     @Test
+    fun `test Identifier creation from string without namespace`() {
+        val identifier = Identifier.fromString("custompath")
+        assertEquals("minecraft:custompath", identifier.toString())
+    }
+
+    @Test
     fun `test Identifier with too long string`() {
         val longPath = "a".repeat(32767 - "customnamespace:".length + 1)
         assertFailsWith<IllegalArgumentException> {

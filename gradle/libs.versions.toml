@@ -3,7 +3,6 @@ kotlin = "2.1.0"
 kotlin-coroutines = "1.10.1"
 ktor = "3.1.1"
 adventure = "4.19.0"
-cloudburstnbt = "3.0.3.Final"
 
 [libraries]
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
@@ -14,7 +13,6 @@ ktor-network-tls = { module = "io.ktor:ktor-network-tls", version.ref = "ktor" }
 
 adventure-nbt = { module = "net.kyori:adventure-nbt", version.ref = "adventure" }
 adventure-text-serializer-gson = { module = "net.kyori:adventure-text-serializer-gson", version.ref = "adventure" }
-cloudburstnbt = { module = "org.cloudburstmc:nbt", version.ref = "cloudburstnbt" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

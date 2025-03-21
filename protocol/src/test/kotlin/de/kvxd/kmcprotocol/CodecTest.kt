@@ -7,6 +7,7 @@ import de.kvxd.kmcprotocol.registry.PacketMetadata
 import de.kvxd.kmcprotocol.registry.PacketRegistry
 import io.ktor.utils.io.*
 import kotlinx.coroutines.runBlocking
+import net.kyori.adventure.text.Component
 import java.util.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,7 +28,8 @@ data class ExamplePacket(
     var string: String,
     var varInt: Int,
     var varLong: Long,
-    var uuid: UUID
+    var uuid: UUID,
+    var jsonComponent: Component
 ) : MinecraftPacket {
 
     companion object {
@@ -44,12 +46,13 @@ data class ExamplePacket(
             varInt(ExamplePacket::varInt)
             varLong(ExamplePacket::varLong)
             uuid(ExamplePacket::uuid)
+            json(ExamplePacket::jsonComponent)
         }
     }
 
 }
 
-class ExamplePacketTest {
+class CodecTest {
 
     private val packet = ExamplePacket(
         true,
@@ -62,7 +65,8 @@ class ExamplePacketTest {
         "Hello, World",
         0,
         0L,
-        UUID.randomUUID()
+        UUID.randomUUID(),
+        Component.text("Hello, World")
     )
 
     @Test

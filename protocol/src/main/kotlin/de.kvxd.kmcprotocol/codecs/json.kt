@@ -6,7 +6,7 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer
 import kotlin.reflect.KProperty1
 
-private val serializer = GsonComponentSerializer.gson()
+internal val jsonSerializer = GsonComponentSerializer.gson()
 
 fun <T : MinecraftPacket> PacketCodec.PacketCodecBuilder<T>.json(
     property: KProperty1<T, Component>
@@ -14,8 +14,8 @@ fun <T : MinecraftPacket> PacketCodec.PacketCodecBuilder<T>.json(
     addCodec<Component>(
         encoder = { packet, channel ->
             val value = property.get(packet)
-            channel.writeString(serializer.serialize(value))
+            channel.writeString(jsonSerializer.serialize(value))
         },
-        decoder = { channel -> serializer.deserialize(channel.readString()) }
+        decoder = { channel -> jsonSerializer.deserialize(channel.readString()) }
     )
 }

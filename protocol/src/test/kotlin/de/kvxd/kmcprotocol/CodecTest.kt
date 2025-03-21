@@ -8,6 +8,9 @@ import de.kvxd.kmcprotocol.registry.PacketRegistry
 import io.ktor.utils.io.*
 import kotlinx.coroutines.runBlocking
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.event.ClickEvent
+import net.kyori.adventure.text.format.Style
+import net.kyori.adventure.text.format.TextColor
 import java.util.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -29,7 +32,9 @@ data class ExamplePacket(
     var varInt: Int,
     var varLong: Long,
     var uuid: UUID,
-    var jsonComponent: Component
+    var jsonComponent: Component,
+    var nbtComponent: Component,
+    var styledNbtComponent: Component,
 ) : MinecraftPacket {
 
     companion object {
@@ -47,6 +52,8 @@ data class ExamplePacket(
             varLong(ExamplePacket::varLong)
             uuid(ExamplePacket::uuid)
             json(ExamplePacket::jsonComponent)
+            nbt(ExamplePacket::nbtComponent)
+            nbt(ExamplePacket::styledNbtComponent)
         }
     }
 
@@ -66,7 +73,10 @@ class CodecTest {
         0,
         0L,
         UUID.randomUUID(),
+        Component.text("Hello, World"),
+        Component.text("Hello, World"),
         Component.text("Hello, World")
+            .style(Style.style(TextColor.color(255, 0, 255), ClickEvent.openUrl("https://0x1bd.github.io")))
     )
 
     @Test

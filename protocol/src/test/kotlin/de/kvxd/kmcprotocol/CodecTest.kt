@@ -37,6 +37,7 @@ data class ExamplePacket(
     var nbtComponent: Component,
     var styledNbtComponent: Component,
     var position: Vec3i,
+    var intArray: List<Vec3i>
 ) : MinecraftPacket {
 
     companion object {
@@ -57,6 +58,7 @@ data class ExamplePacket(
             element(ExamplePacket::nbtComponent, NbtTextCodec)
             element(ExamplePacket::styledNbtComponent, NbtTextCodec)
             element(ExamplePacket::position, Vec3iCodec)
+            element(ExamplePacket::intArray, PrefixedArrayCodec(VarIntCodec, Vec3iCodec))
         }
     }
 
@@ -80,7 +82,12 @@ class CodecTest {
         Component.text("Hello, World"),
         Component.text("Hello, World")
             .style(Style.style(TextColor.color(255, 0, 255), ClickEvent.openUrl("https://0x1bd.github.io"))),
-        Vec3i(42)
+        Vec3i(42),
+        listOf(
+            Vec3i(1),
+            Vec3i(2),
+            Vec3i(3)
+        )
     )
 
     @Test

@@ -11,9 +11,11 @@ class PacketCodec<T : MinecraftPacket>(
     val decode: suspend (ByteReadChannel) -> T
 ) {
 
-    suspend fun encode(packet: MinecraftPacket, channel: ByteWriteChannel) {
+    suspend fun encode(packet: MinecraftPacket, channel: ByteWriteChannel, flush: Boolean = false) {
         @Suppress("UNCHECKED_CAST")
         encode.invoke(packet as T, channel)
+        if (flush)
+            channel.flush()
     }
 
     suspend fun decode(channel: ByteReadChannel): MinecraftPacket =

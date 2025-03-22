@@ -53,7 +53,7 @@ data class TestPacket(
             element(TestPacket::nbtComponent, NbtTextCodec)
             element(TestPacket::styledNbtComponent, NbtTextCodec)
             element(TestPacket::position, Vec3iCodec)
-            element(TestPacket::array, PrefixedArrayCodec(VarIntCodec, Vec3iCodec))
+            element(TestPacket::array, PrefixedArrayCodec(Vec3iCodec))
         }
 
         fun generateTestPacket(): TestPacket =

@@ -14,7 +14,7 @@ class CodecTest {
     fun `test example packet codec`() = runBlocking {
         val channel = ByteChannel()
 
-        TestPacket.CODEC.encode(packet, channel)
+        TestPacket.CODEC.encode(packet, channel, true)
 
         val decoded = TestPacket.CODEC.decode(channel)
 
@@ -31,9 +31,9 @@ class CodecTest {
 
         val channel = ByteChannel()
 
-        registry.getCodecFromId(0).encode(packet, channel)
+        registry.getPacketDataById(0).first.encode(packet, channel, true)
 
-        val decoded = registry.getCodecFromId(0).decode(channel)
+        val decoded = registry.getPacketDataById(0).first.decode(channel)
 
         assertEquals(packet, decoded)
     }

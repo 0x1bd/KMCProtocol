@@ -3,24 +3,21 @@ package de.kvxd.kmcprotocol.codec.codecs
 import de.kvxd.kmcprotocol.codec.ElementCodec
 import io.ktor.utils.io.*
 
-class PrefixedArrayCodec<P, E>(
-    private val prefixCodec: ElementCodec<P>,
-    private val elementCodec: ElementCodec<E>,
-    private val sizeToPrefix: (Int) -> P = { it as P },
-    private val prefixToSize: (P) -> Int = { it as Int }
+class PrefixedArrayCodec<E>(
+    private val elementCodec: ElementCodec<E>
 ) : ElementCodec<List<E>> {
 
     override suspend fun encode(channel: ByteWriteChannel, value: List<E>) {
-        val prefixValue = sizeToPrefix(value.size)
-        prefixCodec.encode(channel, prefixValue)
+        VarIntCodec.encode(channel, value.size)
+
         value.forEach { element ->
             elementCodec.encode(channel, element)
         }
     }
 
     override suspend fun decode(channel: ByteReadChannel): List<E> {
-        val prefixValue = prefixCodec.decode(channel)
-        val size = prefixToSize(prefixValue)
+        val size = VarIntCodec.decode(channel)
+
         if (size < 0) {
             throw IllegalArgumentException("Array size cannot be negative: $size")
         }

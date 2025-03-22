@@ -2,14 +2,13 @@ package de.kvxd.kmcprotocol
 
 import de.kvxd.kmcprotocol.codec.PacketCodec
 import de.kvxd.kmcprotocol.codec.codecs.StringCodec
-import de.kvxd.kmcprotocol.codec.codecs.UShortCodec
 import de.kvxd.kmcprotocol.codec.codecs.VarIntCodec
 import de.kvxd.kmcprotocol.network.Client
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
-import de.kvxd.kmcprotocol.registry.PacketMetadata
-import de.kvxd.kmcprotocol.registry.PacketRegistry
+import de.kvxd.kmcprotocol.packet.PacketMetadata
 import io.ktor.network.sockets.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 
@@ -20,42 +19,52 @@ class NetworkTest {
         direction = Direction.SERVERBOUND,
         state = ProtocolState.HANDSHAKE
     )
-    data class HandshakePacket(
-        val protocolVersion: Int,
-        val hostname: String,
-        val port: Int,
-        val intent: Int
+    data class ServerboundTestPacket(
+        val foo: Int,
     ) : MinecraftPacket {
         companion object {
-            val CODEC = PacketCodec<HandshakePacket> {
-                element(HandshakePacket::protocolVersion, VarIntCodec)
-                element(HandshakePacket::hostname, StringCodec)
-                element(HandshakePacket::port, UShortCodec)
-                element(HandshakePacket::intent, VarIntCodec)
+            val CODEC = PacketCodec<ServerboundTestPacket> {
+                element(ServerboundTestPacket::foo, VarIntCodec)
+            }
+        }
+    }
+
+    @PacketMetadata(
+        id = 0x00,
+        direction = Direction.CLIENTBOUND,
+        state = ProtocolState.HANDSHAKE
+    )
+    data class ClientboundTestPacket(
+        val foo: String,
+    ) : MinecraftPacket {
+        companion object {
+            val CODEC = PacketCodec<ClientboundTestPacket> {
+                element(ClientboundTestPacket::foo, StringCodec)
             }
         }
     }
 
     @Test
     fun `test client creation`() = runBlocking {
-        val protocol = MinecraftProtocol()
-
-        val registry = PacketRegistry.create(protocol) {
-            registerPacket(HandshakePacket::class, HandshakePacket.CODEC)
+        val protocol = MinecraftProtocol {
+            registerPacket(ServerboundTestPacket::class, ServerboundTestPacket.CODEC)
+            registerPacket(ClientboundTestPacket::class, ClientboundTestPacket.CODEC)
         }
 
-        val client = Client(InetSocketAddress("localhost", 25565), protocol, registry)
+        val client = Client(InetSocketAddress("localhost", 25565), protocol)
 
         client.connect()
 
         client.send(
-            HandshakePacket(
+            ServerboundTestPacket(
                 769,
-                "localhost",
-                25565,
-                2
             )
         )
+
+        protocol.direction = Direction.CLIENTBOUND
+
+        while (true)
+            delay(100)
 
         client.disconnect()
     }

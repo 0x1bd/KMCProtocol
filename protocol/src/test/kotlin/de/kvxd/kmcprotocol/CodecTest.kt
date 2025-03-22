@@ -1,6 +1,5 @@
 package de.kvxd.kmcprotocol
 
-import de.kvxd.kmcprotocol.registry.PacketRegistry
 import io.ktor.utils.io.*
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -23,17 +22,15 @@ class CodecTest {
 
     @Test
     fun `test example packet codec with registry`() = runBlocking {
-        val protocol = MinecraftProtocol()
-
-        val registry = PacketRegistry.create(protocol) {
+        val protocol = MinecraftProtocol {
             registerPacket(TestPacket::class, TestPacket.CODEC)
         }
 
         val channel = ByteChannel()
 
-        registry.getPacketDataById(0).first.encode(packet, channel, true)
+        protocol.registry.getPacketDataById(0).first.encode(packet, channel, true)
 
-        val decoded = registry.getPacketDataById(0).first.decode(channel)
+        val decoded = protocol.registry.getPacketDataById(0).first.decode(channel)
 
         assertEquals(packet, decoded)
     }

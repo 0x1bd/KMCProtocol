@@ -33,4 +33,10 @@ object VarIntCodec : ElementCodec<Int> {
 
         return value.toInt()
     }
+
+    suspend fun decodeOrNull(channel: ByteReadChannel): Int? = try {
+        decode(channel)
+    } catch (ignored: Exception) {
+        null
+    }
 }

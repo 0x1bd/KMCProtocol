@@ -4,7 +4,7 @@ import de.kvxd.kmcprotocol.codec.PacketCodec
 import de.kvxd.kmcprotocol.codec.codecs.*
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
-import de.kvxd.kmcprotocol.registry.PacketMetadata
+import de.kvxd.kmcprotocol.packet.PacketMetadata
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.format.Style

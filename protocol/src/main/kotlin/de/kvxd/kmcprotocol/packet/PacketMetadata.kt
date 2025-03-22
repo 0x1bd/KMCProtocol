@@ -1,7 +1,6 @@
-package de.kvxd.kmcprotocol.registry
+package de.kvxd.kmcprotocol.packet
 
 import de.kvxd.kmcprotocol.ProtocolState
-import de.kvxd.kmcprotocol.packet.Direction
 
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.CLASS)

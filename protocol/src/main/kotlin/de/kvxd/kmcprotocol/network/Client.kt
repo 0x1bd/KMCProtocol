@@ -2,7 +2,6 @@ package de.kvxd.kmcprotocol.network
 
 import de.kvxd.kmcprotocol.MinecraftProtocol
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
-import de.kvxd.kmcprotocol.packet.PacketHeader
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
@@ -33,7 +32,7 @@ class Client(
 
         scope.launch {
             while (true) {
-                val packet = PacketHeader.Uncompressed.receive(readChannel, protocol)
+                val packet = protocol.packetHeader.receive(readChannel, protocol)
 
                 packet?.let { packetFlow.emit(it) }
             }
@@ -45,7 +44,7 @@ class Client(
     }
 
     suspend fun send(packet: MinecraftPacket) {
-        PacketHeader.Uncompressed.send(packet, writeChannel, protocol)
+        protocol.packetHeader.send(packet, writeChannel, protocol)
     }
 
     fun disconnect() {

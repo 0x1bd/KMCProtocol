@@ -39,4 +39,15 @@ object VarIntCodec : ElementCodec<Int> {
     } catch (ignored: Exception) {
         null
     }
+
+    fun size(value: Int): Int {
+        var current = value
+        var size = 0
+
+        do {
+            current = current ushr 7
+            size++
+        } while (current != 0)
+        return size
+    }
 }

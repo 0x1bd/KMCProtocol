@@ -4,11 +4,12 @@ import de.kvxd.kmcprotocol.codec.PacketCodec
 import de.kvxd.kmcprotocol.codec.codecs.StringCodec
 import de.kvxd.kmcprotocol.codec.codecs.VarIntCodec
 import de.kvxd.kmcprotocol.network.Client
+import de.kvxd.kmcprotocol.network.Server
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
 import de.kvxd.kmcprotocol.packet.PacketMetadata
 import io.ktor.network.sockets.*
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 
@@ -45,32 +46,62 @@ class NetworkTest {
     }
 
     @Test
-    fun `test client creation`() = runBlocking {
-        val protocol = MinecraftProtocol {
-            registerPacket(ServerboundTestPacket::class, ServerboundTestPacket.CODEC)
-            registerPacket(ClientboundTestPacket::class, ClientboundTestPacket.CODEC)
+    fun `test full networking`() {
+        runBlocking {
+
+            launch {
+                val protocol = MinecraftProtocol {
+                    registerPacket(ServerboundTestPacket::class, ServerboundTestPacket.CODEC)
+                    registerPacket(ClientboundTestPacket::class, ClientboundTestPacket.CODEC)
+                }
+
+                val server = Server(protocol = protocol)
+
+                server.addListener(object : Server.ServerListener() {
+
+                    override fun sessionConnected(session: Server.Session) {
+                        session.addListener(object : Server.SessionListener() {
+                            override suspend fun packetReceived(packet: MinecraftPacket) {
+                                println("Client to server: $packet")
+
+                                session.send(ClientboundTestPacket("Hello, World!"))
+                            }
+                        })
+                    }
+                })
+
+                server.bind()
+            }
+
+            launch {
+                val protocol = MinecraftProtocol {
+                    registerPacket(ServerboundTestPacket::class, ServerboundTestPacket.CODEC)
+                    registerPacket(ClientboundTestPacket::class, ClientboundTestPacket.CODEC)
+                }
+
+                val client = Client(InetSocketAddress("localhost", 25565), protocol)
+
+                client.addListener(object : Client.ClientListener() {
+
+                    override fun packetReceived(packet: MinecraftPacket) {
+                        println("Client received $packet")
+                    }
+
+                    override fun packetSent(packet: MinecraftPacket) {
+                        println("Client sent: $packet")
+                    }
+
+                })
+
+                client.connect()
+
+                client.send(
+                    ServerboundTestPacket(
+                        769,
+                    )
+                )
+            }
         }
-
-        val client = Client(InetSocketAddress("localhost", 25565), protocol)
-
-        client.connect()
-
-        client.send(
-            ServerboundTestPacket(
-                769,
-            )
-        )
-
-        protocol.direction = Direction.CLIENTBOUND
-
-        client.onPacket { packet ->
-            println(packet)
-        }
-
-        while (true)
-            delay(100)
-
-        client.disconnect()
     }
 
 }

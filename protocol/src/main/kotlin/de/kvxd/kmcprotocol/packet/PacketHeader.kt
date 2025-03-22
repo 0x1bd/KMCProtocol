@@ -8,7 +8,11 @@ import kotlinx.io.readByteArray
 interface PacketHeader {
 
     suspend fun send(packet: MinecraftPacket, channel: ByteWriteChannel, protocol: MinecraftProtocol)
-    suspend fun receive(channel: ByteReadChannel, protocol: MinecraftProtocol): MinecraftPacket?
+    suspend fun receive(
+        channel: ByteReadChannel,
+        protocol: MinecraftProtocol,
+        expectedDirection: Direction
+    ): MinecraftPacket?
 
     object Uncompressed : PacketHeader {
 
@@ -29,14 +33,18 @@ interface PacketHeader {
             channel.flush()
         }
 
-        override suspend fun receive(channel: ByteReadChannel, protocol: MinecraftProtocol): MinecraftPacket? {
+        override suspend fun receive(
+            channel: ByteReadChannel,
+            protocol: MinecraftProtocol,
+            expectedDirection: Direction
+        ): MinecraftPacket? {
             val length = VarIntCodec.decodeOrNull(channel)
             val id = VarIntCodec.decodeOrNull(channel)
 
             if (length == null || id == null)
                 return null
 
-            val (codec, metadata) = protocol.registry.getPacketDataById(id)
+            val (codec, metadata) = protocol.registry.getPacketDataById(id, expectedDirection)
 
             return codec.decode(channel)
         }

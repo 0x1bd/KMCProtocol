@@ -1,5 +1,6 @@
 package de.kvxd.kmcprotocol
 
+import de.kvxd.kmcprotocol.packet.Direction
 import io.ktor.utils.io.*
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -28,9 +29,9 @@ class CodecTest {
 
         val channel = ByteChannel()
 
-        protocol.registry.getPacketDataById(0).first.encode(packet, channel, true)
+        protocol.registry.getPacketDataById(0, Direction.SERVERBOUND).first.encode(packet, channel, true)
 
-        val decoded = protocol.registry.getPacketDataById(0).first.decode(channel)
+        val decoded = protocol.registry.getPacketDataById(0, Direction.SERVERBOUND).first.decode(channel)
 
         assertEquals(packet, decoded)
     }

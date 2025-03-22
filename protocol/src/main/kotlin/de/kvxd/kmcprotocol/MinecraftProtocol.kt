@@ -11,7 +11,6 @@ import kotlin.reflect.full.findAnnotations
 class MinecraftProtocol(initPacketRegistry: PacketRegistry.() -> Unit) {
 
     var state: ProtocolState = ProtocolState.HANDSHAKE
-    var direction: Direction = Direction.SERVERBOUND
 
     var registry: PacketRegistry
 
@@ -51,10 +50,6 @@ class MinecraftProtocol(initPacketRegistry: PacketRegistry.() -> Unit) {
             val entry = idDirectionToEntry[key]
                 ?: throw IllegalArgumentException("No packet registered with ID $id and direction $direction")
             return Pair(entry.codec, entry.metadata)
-        }
-
-        fun getPacketDataById(id: Int): Pair<PacketCodec<*>, PacketMetadata> {
-            return getPacketDataById(id, direction)
         }
 
         private fun missingError(packet: MinecraftPacket): Nothing {

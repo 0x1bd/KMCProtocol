@@ -1,14 +1,13 @@
 package de.kvxd.kmcprotocol.network
 
 import de.kvxd.kmcprotocol.MinecraftProtocol
-import de.kvxd.kmcprotocol.codec.codecs.VarIntCodec
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
+import de.kvxd.kmcprotocol.packet.PacketHeader
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.io.readByteArray
 
 class Client(
     private val address: SocketAddress = InetSocketAddress("localhost", 25565),
@@ -34,15 +33,9 @@ class Client(
 
         scope.launch {
             while (true) {
-                VarIntCodec.decodeOrNull(readChannel)?.let { len ->
-                    VarIntCodec.decodeOrNull(readChannel)?.let { id ->
-                        val (codec, metadata) = protocol.registry.getPacketDataById(id)
+                val packet = PacketHeader.Uncompressed.receive(readChannel, protocol)
 
-                        val packet = codec.decode(readChannel)
-
-                        packetFlow.emit(packet)
-                    }
-                }
+                packet?.let { packetFlow.emit(it) }
             }
         }
     }
@@ -52,20 +45,7 @@ class Client(
     }
 
     suspend fun send(packet: MinecraftPacket) {
-        val (packetId, codec) = protocol.registry.getPacketData(packet)
-
-        val content = ByteChannel(autoFlush = false).apply {
-            VarIntCodec.encode(this, packetId)
-            codec.encode(packet, this)
-            flush()
-            close()
-        }
-
-        val contentBytes = content.readRemaining().readByteArray()
-
-        VarIntCodec.encode(writeChannel, contentBytes.size)
-        writeChannel.writeFully(contentBytes)
-        writeChannel.flush()
+        PacketHeader.Uncompressed.send(packet, writeChannel, protocol)
     }
 
     fun disconnect() {

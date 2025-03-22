@@ -3,7 +3,7 @@ package de.kvxd.kmcprotocol
 import de.kvxd.kmcprotocol.codec.PacketCodec
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
-import de.kvxd.kmcprotocol.packet.PacketHeader
+import de.kvxd.kmcprotocol.packet.PacketFormat
 import de.kvxd.kmcprotocol.packet.PacketMetadata
 import kotlin.reflect.KClass
 import kotlin.reflect.full.findAnnotations
@@ -14,7 +14,7 @@ class MinecraftProtocol(initPacketRegistry: PacketRegistry.() -> Unit) {
 
     var registry: PacketRegistry
 
-    var packetHeader: PacketHeader = PacketHeader.Uncompressed
+    var packetFormat: PacketFormat = PacketFormat.Uncompressed
 
     init {
         registry = PacketRegistry().apply(initPacketRegistry)

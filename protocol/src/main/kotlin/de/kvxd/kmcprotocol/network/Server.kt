@@ -110,7 +110,7 @@ class Server(
         private suspend fun readPackets() {
             try {
                 while (isActive) {
-                    protocol.packetHeader.receive(readChannel, protocol, Direction.SERVERBOUND)?.let { packet ->
+                    protocol.packetFormat.receive(readChannel, protocol, Direction.SERVERBOUND)?.let { packet ->
                         listeners.forEach { it.packetReceived(packet) }
                     }
                 }
@@ -121,7 +121,7 @@ class Server(
 
         suspend fun send(packet: MinecraftPacket) {
             try {
-                protocol.packetHeader.send(packet, writeChannel, protocol)
+                protocol.packetFormat.send(packet, writeChannel, protocol)
             } catch (e: Exception) {
                 println("Error sending packet: ${e.message}")
                 close()

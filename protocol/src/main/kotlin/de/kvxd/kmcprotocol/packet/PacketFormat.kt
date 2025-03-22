@@ -5,7 +5,7 @@ import de.kvxd.kmcprotocol.codec.codecs.VarIntCodec
 import io.ktor.utils.io.*
 import kotlinx.io.readByteArray
 
-interface PacketHeader {
+interface PacketFormat {
 
     suspend fun send(packet: MinecraftPacket, channel: ByteWriteChannel, protocol: MinecraftProtocol)
     suspend fun receive(
@@ -14,7 +14,7 @@ interface PacketHeader {
         expectedDirection: Direction
     ): MinecraftPacket?
 
-    object Uncompressed : PacketHeader {
+    object Uncompressed : PacketFormat {
 
         override suspend fun send(packet: MinecraftPacket, channel: ByteWriteChannel, protocol: MinecraftProtocol) {
             val (packetId, codec) = protocol.registry.getPacketData(packet)

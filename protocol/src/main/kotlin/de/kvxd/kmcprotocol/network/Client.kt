@@ -34,7 +34,7 @@ class Client(
 
         scope.launch {
             while (true) {
-                val packet = protocol.packetHeader.receive(readChannel, protocol, Direction.CLIENTBOUND)
+                val packet = protocol.packetFormat.receive(readChannel, protocol, Direction.CLIENTBOUND)
 
                 packet?.let { packet ->
                     listeners.forEach { listener -> listener.packetReceived(packet) }
@@ -62,7 +62,7 @@ class Client(
 
     suspend fun send(packet: MinecraftPacket) {
         if (listeners.any { !it.packetSending(packet) }) return
-        protocol.packetHeader.send(packet, writeChannel, protocol)
+        protocol.packetFormat.send(packet, writeChannel, protocol)
         listeners.forEach { it.packetSent(packet) }
     }
 

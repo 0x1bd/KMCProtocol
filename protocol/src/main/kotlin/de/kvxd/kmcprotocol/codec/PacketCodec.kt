@@ -1,6 +1,5 @@
 package de.kvxd.kmcprotocol.codec
 
-import de.kvxd.kmcprotocol.flushBlocking
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
 import io.ktor.utils.io.*
 import kotlin.reflect.KClass
@@ -64,7 +63,6 @@ class PacketCodec<T : MinecraftPacket>(
                 encode = { packet, channel ->
                     encoders.forEach {
                         it(packet, channel)
-                        channel.flushBlocking()
                     }
                 },
                 decode = { channel ->

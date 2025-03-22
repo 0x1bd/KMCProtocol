@@ -7,52 +7,43 @@ import kotlin.reflect.KClass
 import kotlin.reflect.full.findAnnotations
 
 class PacketRegistry(private val protocol: MinecraftProtocol) {
+    private val classToEntry = mutableMapOf<KClass<out MinecraftPacket>, PacketEntry>()
+    private val idToEntry = mutableMapOf<Int, PacketEntry>()
 
-    private val packets = mutableMapOf<KClass<out MinecraftPacket>, PacketEntry>()
+    fun registerPacket(packetClass: KClass<out MinecraftPacket>, codec: PacketCodec<out MinecraftPacket>) {
+        val metadata = packetClass.findAnnotations<PacketMetadata>()
+            .firstOrNull { it.state == protocol.state }
+            ?: throw IllegalStateException("Packet ${packetClass.simpleName} missing valid metadata for state ${protocol.state}")
 
-    fun registerPacket(packetKClass: KClass<out MinecraftPacket>, codec: PacketCodec<out MinecraftPacket>) {
-        val annotations = packetKClass.findAnnotations<PacketMetadata>()
-
-        if (annotations.isEmpty()) {
-            throw IllegalStateException("Packet class $packetKClass is missing PacketMetadata annotation")
+        require(!idToEntry.containsKey(metadata.id)) {
+            "Duplicate packet ID ${metadata.id} (${packetClass.simpleName}) in state ${protocol.state}"
         }
 
-        val metadata = annotations.firstOrNull { it.state == protocol.state }
-            ?: throw IllegalStateException("Packet $packetKClass does not support state ${protocol.state}. Expecting ${annotations.first().state}")
-
-        packets[packetKClass] = PacketEntry(metadata, codec)
+        val entry = PacketEntry(metadata, codec)
+        classToEntry[packetClass] = entry
+        idToEntry[metadata.id] = entry
     }
 
-    fun getPacketMetadata(packetKClass: KClass<out MinecraftPacket>): PacketMetadata {
-        val entry =
-            packets[packetKClass] ?: throw IllegalArgumentException("Packet $packetKClass has not been registered.")
-        if (entry.metadata.state != protocol.state) throw IllegalStateException("Protocol state ${protocol.state} does not match the expected state for packet $packetKClass")
-        return entry.metadata
+    fun getPacketData(packet: MinecraftPacket): Triple<Int, PacketCodec<*>, PacketMetadata> {
+        val entry = classToEntry[packet::class] ?: throw missingError(packet)
+        return Triple(entry.metadata.id, entry.codec, entry.metadata)
     }
 
-    fun getPacketID(packetKClass: KClass<out MinecraftPacket>): Int {
-        return getPacketMetadata(packetKClass).id
+    fun getPacketDataById(id: Int): Pair<PacketCodec<*>, PacketMetadata> {
+        val entry = idToEntry[id] ?: throw IllegalArgumentException("No packet registered with ID $id")
+        return Pair(entry.codec, entry.metadata)
     }
 
-    fun getPacketClassById(id: Int): KClass<out MinecraftPacket> {
-        return packets.filter { it.value.metadata.id == id }.entries.first().key
-    }
-
-    fun getCodec(packetKClass: KClass<out MinecraftPacket>): PacketCodec<out MinecraftPacket> {
-        val entry =
-            packets[packetKClass] ?: throw IllegalArgumentException("Packet $packetKClass has not been registered.")
-        return entry.codec
-    }
-
-    fun getCodecFromId(id: Int): PacketCodec<out MinecraftPacket> {
-        return packets.filter { it.value.metadata.id == id }.entries.first().value.codec
+    private fun missingError(packet: MinecraftPacket): Nothing {
+        val available = classToEntry.keys.joinToString { it.simpleName ?: "Unknown" }
+        throw IllegalArgumentException(
+            "Packet ${packet::class.simpleName} not registered. Available: $available"
+        )
     }
 
     companion object {
         fun create(protocol: MinecraftProtocol, init: PacketRegistry.() -> Unit): PacketRegistry {
-            val registry = PacketRegistry(protocol)
-            registry.init()
-            return registry
+            return PacketRegistry(protocol).apply(init)
         }
     }
 

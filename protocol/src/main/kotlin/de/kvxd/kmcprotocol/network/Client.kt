@@ -7,6 +7,7 @@ import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.io.readByteArray
 
 class Client(
@@ -21,6 +22,8 @@ class Client(
     private lateinit var writeChannel: ByteWriteChannel
     private lateinit var readChannel: ByteReadChannel
 
+    private val packetFlow = MutableSharedFlow<MinecraftPacket>()
+
     suspend fun connect() {
         socket = aSocket(selectorManager)
             .tcp()
@@ -33,18 +36,19 @@ class Client(
             while (true) {
                 VarIntCodec.decodeOrNull(readChannel)?.let { len ->
                     VarIntCodec.decodeOrNull(readChannel)?.let { id ->
-                        println("Len: $len")
-                        println("id: $id")
-
                         val (codec, metadata) = protocol.registry.getPacketDataById(id)
 
                         val packet = codec.decode(readChannel)
 
-                        println(packet)
+                        packetFlow.emit(packet)
                     }
                 }
             }
         }
+    }
+
+    suspend fun onPacket(function: (MinecraftPacket) -> Unit) {
+        packetFlow.collect { function(it) }
     }
 
     suspend fun send(packet: MinecraftPacket) {

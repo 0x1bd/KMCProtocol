@@ -63,6 +63,10 @@ class NetworkTest {
 
         protocol.direction = Direction.CLIENTBOUND
 
+        client.onPacket { packet ->
+            println(packet)
+        }
+
         while (true)
             delay(100)
 

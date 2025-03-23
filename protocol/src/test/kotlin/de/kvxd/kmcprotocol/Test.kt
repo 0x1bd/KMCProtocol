@@ -20,8 +20,6 @@ class Test {
         val protocol = defaultProtocol()
         val server = Server(protocol = protocol)
 
-        server.protocol.state = ProtocolState.HANDSHAKE
-
         server.eventBus.handler(Server.SessionConnectedEvent::class) { event ->
             println("Session connected: ${event.session}")
 
@@ -33,9 +31,8 @@ class Test {
                 if (packet is ServerboundHandshakePacket) {
                     println("Got handshake, switching to ${packet.nextState.toProtocolState()}")
                     server.protocol.state = packet.nextState.toProtocolState()
+                    //event.session.protocol.state = packet.nextState.toProtocolState()
                 }
-
-                var x = 0
 
                 if (packet is ServerboundStatusRequestPacket) {
                     runBlocking {

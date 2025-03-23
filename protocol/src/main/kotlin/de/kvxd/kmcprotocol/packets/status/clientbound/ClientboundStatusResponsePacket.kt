@@ -18,7 +18,7 @@ data class StatusResponse(
     val enforcesSecureChat: Boolean? = false
 )
 
-data class StatusVersion(val name: String, val protocolVersion: Int)
+data class StatusVersion(val name: String, val protocol: Int)
 
 data class StatusPlayers(val max: Int, val online: Int, val sample: List<Player>) {
 

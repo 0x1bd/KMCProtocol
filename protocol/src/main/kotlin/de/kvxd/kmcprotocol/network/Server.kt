@@ -87,7 +87,7 @@ class Server(
 
     inner class Session(
         private val socket: Socket,
-        private val protocol: MinecraftProtocol
+        val protocol: MinecraftProtocol
     ) : CoroutineScope by CoroutineScope(SupervisorJob() + Dispatchers.IO) {
 
         private val writeChannel = socket.openWriteChannel(autoFlush = true)

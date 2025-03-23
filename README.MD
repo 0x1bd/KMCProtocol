@@ -17,3 +17,7 @@ dependencies {
 }
 ```
 Replace `(version)` with the latest version found [here](https://github.com/0x1bd/KMCProtocol/releases).
+
+## Usage
+
+The [wiki](https://github.com/0x1bd/KMCProtocol/wiki) provides some basic usage and examples

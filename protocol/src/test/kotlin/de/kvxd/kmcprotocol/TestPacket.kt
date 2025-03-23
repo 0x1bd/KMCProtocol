@@ -11,6 +11,15 @@ import net.kyori.adventure.text.format.Style
 import net.kyori.adventure.text.format.TextColor
 import java.util.*
 
+enum class TestEnum {
+
+    One,
+    Two,
+    Three,
+    Four
+
+}
+
 @PacketMetadata(
     id = 0x00,
     direction = Direction.SERVERBOUND,
@@ -32,7 +41,8 @@ data class TestPacket(
     var nbtComponent: Component,
     var styledNbtComponent: Component,
     var position: Vec3i,
-    var array: List<Vec3i>
+    var array: List<Vec3i>,
+    var enum: TestEnum
 ) : MinecraftPacket {
 
     companion object {
@@ -54,6 +64,7 @@ data class TestPacket(
             element(TestPacket::styledNbtComponent, NbtTextCodec)
             element(TestPacket::position, Vec3iCodec)
             element(TestPacket::array, PrefixedArrayCodec(Vec3iCodec))
+            element(TestPacket::enum, enumCodec())
         }
 
         fun generateTestPacket(): TestPacket =
@@ -78,7 +89,8 @@ data class TestPacket(
                     Vec3i(1),
                     Vec3i(2),
                     Vec3i(3)
-                )
+                ),
+                TestEnum.Four
             )
     }
 

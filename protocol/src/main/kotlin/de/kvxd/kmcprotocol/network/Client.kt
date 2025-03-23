@@ -24,6 +24,7 @@ open class Client(
 
     val eventBus = EventBus.create()
     private val connectionJob = CompletableDeferred<Unit>()
+    private var isDisconnecting = false // Flag to prevent multiple disconnects
 
     class ConnectedEvent : Event
     class DisconnectingEvent : Event
@@ -57,7 +58,7 @@ open class Client(
                         packet?.let { eventBus.post(PacketReceivedEvent(it)) }
                     }
                 } finally {
-                    disconnect()
+                    disconnect() // Ensure disconnect is called if the loop exits
                 }
             }
         } catch (e: Exception) {
@@ -84,7 +85,8 @@ open class Client(
     }
 
     fun disconnect() {
-        if (!::socket.isInitialized || socket.isClosed) return
+        if (isDisconnecting || !::socket.isInitialized || socket.isClosed) return
+        isDisconnecting = true // Set the flag to prevent multiple disconnects
 
         eventBus.post(DisconnectingEvent())
         scope.cancel("Client disconnecting")

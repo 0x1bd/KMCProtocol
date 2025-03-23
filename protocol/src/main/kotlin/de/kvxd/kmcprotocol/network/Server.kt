@@ -15,12 +15,10 @@ class Server(
     private val address: SocketAddress = InetSocketAddress("localhost", 25565),
     val protocol: MinecraftProtocol
 ) {
-    private val job = SupervisorJob()
-    private val scope = CoroutineScope(job + Dispatchers.IO)
     private val selectorManager = ActorSelectorManager(Dispatchers.IO)
     private lateinit var socket: ServerSocket
 
-    private val sessions = Collections.synchronizedSet(mutableSetOf<Session>())
+    val sessions = Collections.synchronizedSet(mutableSetOf<Session>())
     private val boundDeferred = CompletableDeferred<Unit>()
 
     val eventBus = EventBus.create()
@@ -31,7 +29,17 @@ class Server(
     class SessionConnectedEvent(val session: Session) : Event
     class SessionDisconnectedEvent(val session: Session) : Event
 
-    suspend fun bind() {
+    suspend fun bind(block: Boolean = false) {
+        val s = CoroutineScope(Dispatchers.IO)
+        if (block)
+            _bind()
+        else
+            s.launch {
+                _bind()
+            }
+    }
+
+    private suspend fun _bind() {
         try {
             socket = aSocket(selectorManager).tcp().bind(address)
             eventBus.post(BoundEvent())
@@ -60,10 +68,9 @@ class Server(
     suspend fun awaitBound() = boundDeferred.await()
 
     fun close() {
-        if (!::socket.isInitialized || socket.isClosed || job.isCancelled) return
+        if (!::socket.isInitialized || socket.isClosed) return
 
         eventBus.post(ClosingEvent())
-        job.cancel()
 
         runBlocking {
             sessions.toSet().forEach { it.close() }
@@ -76,7 +83,7 @@ class Server(
         selectorManager.close()
     }
 
-    private fun isActive() = !socket.isClosed && !job.isCancelled
+    private fun isActive() = !socket.isClosed
 
     inner class Session(
         private val socket: Socket,

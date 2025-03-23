@@ -3,103 +3,77 @@ package de.kvxd.kmcprotocol.network
 import com.kvxd.eventbus.Event
 import com.kvxd.eventbus.EventBus
 import de.kvxd.kmcprotocol.MinecraftProtocol
+import de.kvxd.kmcprotocol.ProtocolState
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
-import java.io.IOException
 
-open class Client(
+class Client(
     private val address: SocketAddress = InetSocketAddress("localhost", 25565),
-    val protocol: MinecraftProtocol
-) {
-    private val selectorManager = ActorSelectorManager(Dispatchers.IO)
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val protocol: MinecraftProtocol
+) : CoroutineScope by CoroutineScope(SupervisorJob() + Dispatchers.IO) {
 
+    private val selectorManager = ActorSelectorManager(Dispatchers.IO)
     private lateinit var socket: Socket
+    private val connectedDeferred = CompletableDeferred<Unit>()
+
     private lateinit var writeChannel: ByteWriteChannel
     private lateinit var readChannel: ByteReadChannel
 
     val eventBus = EventBus.create()
-    private val connectionJob = CompletableDeferred<Unit>()
-    private var isDisconnecting = false // Flag to prevent multiple disconnects
 
-    class ConnectedEvent : Event
-    class DisconnectingEvent : Event
-    class ErrorEvent(val cause: Throwable) : Event
+    object Events {
+        class Connected : Event
+        class Disconnected : Event
 
-    class PacketReceivedEvent(val packet: MinecraftPacket) : Event
-    class PacketSendingEvent(val packet: MinecraftPacket) : Event {
-        var send: Boolean = true
+        class PacketReceivedEvent(val packet: MinecraftPacket) : Event
     }
 
-    class PacketSentEvent(val packet: MinecraftPacket) : Event
+    fun updateProtocolState(state: ProtocolState) {
+        protocol.state = state
+    }
 
-    suspend fun connect() {
-        try {
-            socket = aSocket(selectorManager).tcp().connect(address)
-            writeChannel = socket.openWriteChannel(autoFlush = false)
-            readChannel = socket.openReadChannel()
+    suspend fun connect() = coroutineScope {
+        socket = aSocket(selectorManager).tcp().connect(address)
 
-            eventBus.post(ConnectedEvent())
-            connectionJob.complete(Unit)
+        writeChannel = socket.openWriteChannel()
+        readChannel = socket.openReadChannel()
 
-            scope.launch {
-                try {
-                    while (isActive && !readChannel.isClosedForRead) {
-                        val packet = try {
-                            protocol.packetFormat.receive(readChannel, protocol, Direction.CLIENTBOUND)
-                        } catch (e: Exception) {
-                            eventBus.post(ErrorEvent(e))
-                            break
-                        }
-                        packet?.let { eventBus.post(PacketReceivedEvent(it)) }
-                    }
-                } finally {
-                    disconnect() // Ensure disconnect is called if the loop exits
+        connectedDeferred.complete(Unit)
+
+        eventBus.post(Events.Connected())
+
+        while (!socket.isClosed) {
+            try {
+                val packet = protocol.packetFormat.receive(readChannel, protocol, Direction.CLIENTBOUND)
+
+                packet?.let {
+                    eventBus.post(Events.PacketReceivedEvent(it))
                 }
+            } catch (e: Exception) {
+                println("YOU FAILED ME")
+                e.printStackTrace()
+                disconnect()
             }
-        } catch (e: Exception) {
-            connectionJob.completeExceptionally(e)
-            disconnect()
-            throw e
         }
     }
+
+    suspend fun awaitConnected() = connectedDeferred.await()
 
     suspend fun send(packet: MinecraftPacket) {
-        val event = PacketSendingEvent(packet)
-        eventBus.post(event)
-        if (!event.send) return
-
-        try {
-            protocol.packetFormat.send(packet, writeChannel, protocol)
-            writeChannel.flush()
-            eventBus.post(PacketSentEvent(packet))
-        } catch (e: Exception) {
-            eventBus.post(ErrorEvent(e))
-            disconnect()
-            throw e
-        }
+        println("Send packet: $packet")
+        protocol.packetFormat.send(packet, writeChannel, protocol)
     }
 
     fun disconnect() {
-        if (isDisconnecting || !::socket.isInitialized || socket.isClosed) return
-        isDisconnecting = true // Set the flag to prevent multiple disconnects
+        println("Client closing")
 
-        eventBus.post(DisconnectingEvent())
-        scope.cancel("Client disconnecting")
+        eventBus.post(Events.Disconnected())
 
-        runBlocking {
-            try {
-                socket.close()
-            } catch (e: IOException) {
-                // Ignore close errors
-            }
-        }
-        selectorManager.close()
+        socket.close()
     }
 
-    suspend fun awaitConnection() = connectionJob.await()
 }

@@ -3,157 +3,103 @@ package de.kvxd.kmcprotocol.network
 import com.kvxd.eventbus.Event
 import com.kvxd.eventbus.EventBus
 import de.kvxd.kmcprotocol.MinecraftProtocol
+import de.kvxd.kmcprotocol.ProtocolState
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import kotlinx.coroutines.*
-import java.io.IOException
 import java.util.*
 
 class Server(
     private val address: SocketAddress = InetSocketAddress("0.0.0.0", 25565),
-    val protocol: MinecraftProtocol
+    private val protocol: MinecraftProtocol
 ) {
+
     private val selectorManager = ActorSelectorManager(Dispatchers.IO)
     private lateinit var socket: ServerSocket
+    private val boundDeferred = CompletableDeferred<Unit>()
 
     val sessions = Collections.synchronizedSet(mutableSetOf<Session>())
-    private val boundDeferred = CompletableDeferred<Unit>()
 
     val eventBus = EventBus.create()
 
-    class BoundEvent : Event
-    class ClosingEvent : Event
-    class ErrorEvent(val throwable: Throwable) : Event
-    class SessionConnectedEvent(val session: Session) : Event
-    class SessionDisconnectedEvent(val session: Session) : Event
+    object Events {
+        class ServerBound : Event
+        class ServerClosing : Event
+        class ServerClosed : Event
 
-    suspend fun bind(block: Boolean = false) {
-        val s = CoroutineScope(Dispatchers.IO)
-        if (block)
-            _bind()
-        else
-            s.launch {
-                _bind()
-            }
+        class SessionConnected(val session: Session) : Event
+        class SessionDisconnected(val session: Session) : Event
     }
 
-    private suspend fun _bind() {
-        try {
-            socket = aSocket(selectorManager).tcp().bind(address)
-            eventBus.post(BoundEvent())
-            boundDeferred.complete(Unit)
+    fun updateProtocolState(state: ProtocolState) {
+        protocol.state = state
+    }
 
-            while (isActive()) {
-                val sessionSocket = try {
-                    socket.accept()
-                } catch (e: CancellationException) {
-                    break
-                } catch (e: Exception) {
-                    eventBus.post(ErrorEvent(e))
-                    break
-                }
+    suspend fun bind() {
+        socket = aSocket(selectorManager).tcp().bind(address)
+        eventBus.post(Events.ServerBound())
+        boundDeferred.complete(Unit)
 
-                Session(sessionSocket, protocol).also { session ->
-                    sessions.add(session)
-                    eventBus.post(SessionConnectedEvent(session))
-                }
+        while (!socket.isClosed) {
+            val sessionSocket = socket.accept()
+
+            Session(sessionSocket).also { session ->
+                sessions.add(session)
+                eventBus.post(Events.SessionConnected(session))
             }
-        } finally {
-            close()
         }
     }
 
     suspend fun awaitBound() = boundDeferred.await()
 
     fun close() {
-        if (!::socket.isInitialized || socket.isClosed) return
+        eventBus.post(Events.ServerClosing())
 
-        eventBus.post(ClosingEvent())
-
-        runBlocking {
-            sessions.toSet().forEach { it.close() }
-            try {
-                socket.close()
-            } catch (e: IOException) {
-                // Ignore close errors
-            }
-        }
+        socket.close()
         selectorManager.close()
+
+        eventBus.post(Events.ServerClosed())
     }
 
-    private fun isActive() = !socket.isClosed
+    object SessionEvents {
+        class PacketReceived(val packet: MinecraftPacket) : Event
+    }
 
     inner class Session(
-        private val socket: Socket,
-        val protocol: MinecraftProtocol
+        val socket: Socket
     ) : CoroutineScope by CoroutineScope(SupervisorJob() + Dispatchers.IO) {
 
-        private val writeChannel = socket.openWriteChannel(autoFlush = true)
+        private val writeChannel = socket.openWriteChannel()
         private val readChannel = socket.openReadChannel()
 
         val eventBus = EventBus.create()
-        private val sessionJob = CompletableDeferred<Unit>()
-
-        inner class ConnectedEvent : Event
-        inner class DisconnectedEvent : Event
-        inner class PacketReceivedEvent(val packet: MinecraftPacket) : Event
-        inner class ErrorEvent(val throwable: Throwable) : Event
 
         init {
-            eventBus.post(ConnectedEvent())
             launch {
                 try {
-                    handleConnection()
-                } finally {
-                    cleanup()
+                    do {
+                        val packet = protocol.packetFormat.receive(readChannel, protocol, Direction.SERVERBOUND)
+
+                        packet?.let { eventBus.post(SessionEvents.PacketReceived(packet)) }
+                    } while (!socket.isClosed && isActive)
+                } catch (e: Exception) {
+                    close()
                 }
             }
         }
 
-        private suspend fun handleConnection() {
-            try {
-                while (isActive && !readChannel.isClosedForRead) {
-                    val packet = try {
-                        protocol.packetFormat.receive(readChannel, protocol, Direction.SERVERBOUND)
-                    } catch (e: Exception) {
-                        eventBus.post(ErrorEvent(e))
-                        break
-                    }
-                    packet?.let { eventBus.post(PacketReceivedEvent(it)) }
-                }
-            } finally {
-                sessionJob.complete(Unit)
-            }
-        }
-
-        suspend fun send(packet: MinecraftPacket) {
-            try {
-                protocol.packetFormat.send(packet, writeChannel, protocol)
-            } catch (e: Exception) {
-                eventBus.post(ErrorEvent(e))
-                close()
-                throw e
-            }
-        }
-
-        private fun cleanup() {
-            sessions.remove(this)
-            eventBus.post(DisconnectedEvent())
-            this@Server.eventBus.post(SessionDisconnectedEvent(this))
-            close()
+        fun send(packet: MinecraftPacket) = launch {
+            protocol.packetFormat.send(packet, writeChannel, protocol)
         }
 
         fun close() {
-            coroutineContext.cancel()
-            try {
-                socket.close()
-            } catch (e: IOException) {
-                // Ignore close errors
-            }
-        }
+            sessions.remove(this)
+            this@Server.eventBus.post(Events.SessionDisconnected(this))
 
-        suspend fun awaitTermination() = sessionJob.await()
+            socket.close()
+        }
     }
+
 }

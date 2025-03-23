@@ -17,10 +17,10 @@ interface PacketFormat {
     object Uncompressed : PacketFormat {
 
         override suspend fun send(packet: MinecraftPacket, channel: ByteWriteChannel, protocol: MinecraftProtocol) {
-            val (packetId, codec) = protocol.registry.getPacketData(packet)
+            val (codec, metadata) = protocol.registry.getPacketData(packet)
 
             val content = ByteChannel(autoFlush = false).apply {
-                VarIntCodec.encode(this, packetId)
+                VarIntCodec.encode(this, metadata.id)
                 codec.encode(packet, this)
                 flush()
                 close()
@@ -44,7 +44,7 @@ interface PacketFormat {
             if (length == null || id == null)
                 return null
 
-            val (codec, metadata) = protocol.registry.getPacketDataById(id, expectedDirection)
+            val (codec, metadata) = protocol.registry.getPacketDataById(id, expectedDirection, protocol.state)
 
             return codec.decode(channel)
         }

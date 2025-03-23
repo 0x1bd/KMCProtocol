@@ -12,7 +12,7 @@ import java.io.IOException
 import java.util.*
 
 class Server(
-    private val address: SocketAddress = InetSocketAddress("localhost", 25565),
+    private val address: SocketAddress = InetSocketAddress("0.0.0.0", 25565),
     val protocol: MinecraftProtocol
 ) {
     private val selectorManager = ActorSelectorManager(Dispatchers.IO)

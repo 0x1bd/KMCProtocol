@@ -29,9 +29,14 @@ class CodecTest {
 
         val channel = ByteChannel()
 
-        protocol.registry.getPacketDataById(0, Direction.SERVERBOUND).first.encode(packet, channel, true)
+        protocol.registry.getPacketDataById(0, Direction.SERVERBOUND, protocol.state).first.encode(
+            packet,
+            channel,
+            true
+        )
 
-        val decoded = protocol.registry.getPacketDataById(0, Direction.SERVERBOUND).first.decode(channel)
+        val decoded =
+            protocol.registry.getPacketDataById(0, Direction.SERVERBOUND, protocol.state).first.decode(channel)
 
         assertEquals(packet, decoded)
     }

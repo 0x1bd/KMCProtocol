@@ -7,7 +7,8 @@ KMCProtocol is a kotlin library which implements the minecraft java protocol.
 - Ktor networking integration
 
 ## Installation
-# CURRENTLY NOT AVAILABLE
+
+#### CURRENTLY NOT AVAILABLE
 Add the following dependencies to your `build.gradle.kts` file:
 
 ```kotlin

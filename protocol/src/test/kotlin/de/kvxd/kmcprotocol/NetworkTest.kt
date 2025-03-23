@@ -8,7 +8,7 @@ import de.kvxd.kmcprotocol.network.Server
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
 import de.kvxd.kmcprotocol.packet.PacketMetadata
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -53,102 +53,79 @@ class NetworkTest {
     @Test
     fun `client server connection flow`() = runTest {
         val server = Server(protocol = createProtocol())
+        val boundLatch = CompletableDeferred<Unit>()
+        val clientConnectedLatch = CompletableDeferred<Unit>()
+        val serverClosedLatch = CompletableDeferred<Unit>()
 
-        var clientConnected = false
-        var clientDisconnected = false
+        server.eventBus.handler(Server.BoundEvent::class) { boundLatch.complete(Unit) }
+        server.eventBus.handler(Server.SessionConnectedEvent::class) { clientConnectedLatch.complete(Unit) }
+        server.eventBus.handler(Server.ClosingEvent::class) { serverClosedLatch.complete(Unit) }
 
-        var serverBound = false
-        var serverClosed = false
+        val serverJob = launch { server.bind() }
 
-        server.addListener(object : Server.ServerListener() {
-            override fun serverBound() {
-                serverBound = true
-            }
+        // Wait for server to bind
+        boundLatch.await()
 
-            override fun serverClosing() {
-                serverClosed = true
-            }
+        val client = Client(protocol = createProtocol())
+        client.connect()
+        client.awaitConnection()
 
-            override fun sessionConnected(session: Server.Session) {
-                clientConnected = true
-            }
-
-            override fun sessionDisconnected(session: Server.Session) {
-                clientDisconnected = true
-            }
-
-            override fun error(throwable: Throwable) {
-                throwable.printStackTrace()
-            }
-        })
-
-        launch {
-            server.bind()
-        }
-
-        launch {
-            val client = Client(protocol = createProtocol())
-
-            client.connect()
-            client.disconnect()
-
-
-            assertTrue(clientConnected)
-
-            assertTrue(serverBound)
-        }.join() // Wait for client to finish
+        // Verify client connection
+        clientConnectedLatch.await()
+        client.disconnect()
 
         server.close()
+        serverClosedLatch.await()
 
-        assertTrue(clientDisconnected)
-        assertTrue(serverClosed)
+        assertTrue(clientConnectedLatch.isCompleted)
+        assertTrue(serverClosedLatch.isCompleted)
+        serverJob.cancel()
     }
+
 
     @Test
     fun `client server packet exchange`() = runTest {
         val server = Server(protocol = createProtocol())
+        val testPayload = "Hello, World!"
+        val serverReceived = CompletableDeferred<Unit>()
+        val clientReceived = CompletableDeferred<Unit>()
 
-        var clientGotPacket = false
-        var serverGotPacket = false
-
-        server.addListener(object : Server.ServerListener() {
-            override fun sessionConnected(session: Server.Session) {
-                session.addListener(object : Server.SessionListener() {
-                    override suspend fun packetReceived(packet: MinecraftPacket) {
-                        serverGotPacket = true
-
-                        println("Server")
-
-                        session.send(ClientboundTestPacket("Hello, world!"))
-                    }
-                })
-            }
-        })
-
-        launch {
-            server.bind()
-        }
-
-        launch {
-            val client = Client(protocol = createProtocol())
-
-            client.addListener(object : Client.ClientListener() {
-                override fun packetReceived(packet: MinecraftPacket) {
-                    clientGotPacket = true
-
-                    println("Client")
-
-                    server.close()
-
-                    assertTrue { clientGotPacket }
-                    assertTrue { serverGotPacket }
+        server.eventBus.handler(Server.SessionConnectedEvent::class) { event ->
+            event.session.eventBus.handler(Server.Session.PacketReceivedEvent::class) {
+                serverReceived.complete(Unit)
+                launch {
+                    event.session.send(ClientboundTestPacket(testPayload))
                 }
-            })
-
-            client.connect()
-
-            client.send(ServerboundTestPacket(42))
+            }
         }
+
+        launch { server.bind() }
+        server.awaitBound()
+
+        val client = Client(protocol = createProtocol())
+        client.eventBus.handler(Client.PacketReceivedEvent::class) {
+            if ((it.packet as ClientboundTestPacket).foo == testPayload) {
+                clientReceived.complete(Unit)
+            }
+        }
+
+        client.connect()
+        client.awaitConnection()
+        client.send(ServerboundTestPacket(42))
+
+        // Wait for both packets to be processed
+        withContext(Dispatchers.Default.limitedParallelism(64)) {
+            withTimeout(500) {
+                clientReceived.await()
+                serverReceived.await()
+            }
+        }
+
+        client.disconnect()
+        server.close()
+
+        assertTrue(serverReceived.isCompleted)
+        assertTrue(clientReceived.isCompleted)
     }
 
 }

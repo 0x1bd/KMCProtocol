@@ -4,6 +4,7 @@ kotlin-coroutines = "1.10.1"
 ktor = "3.1.1"
 adventure = "4.19.0"
 cloudburst-nbt = "3.0.0.Final"
+keventbus = "1.2.0"
 
 [libraries]
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
@@ -14,8 +15,9 @@ ktor-network = { module = "io.ktor:ktor-network", version.ref = "ktor" }
 ktor-network-tls = { module = "io.ktor:ktor-network-tls", version.ref = "ktor" }
 
 cloudburst-nbt = { module = "org.cloudburstmc:nbt", version.ref = "cloudburst-nbt" }
-
 adventure-text-serializer-gson = { module = "net.kyori:adventure-text-serializer-gson", version.ref = "adventure" }
+
+keventbus = { module = "com.github.0x1bd:KeventBus", version.ref = "keventbus" }
 
 [bundles]
 kotlin-coroutines = ["kotlin-coroutines", "kotlin-coroutines-test"]

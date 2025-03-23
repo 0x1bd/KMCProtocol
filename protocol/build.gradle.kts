@@ -7,6 +7,11 @@ version = "1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
+
+    maven {
+        name = "Jitpack"
+        url = uri("https://jitpack.io")
+    }
 }
 
 dependencies {
@@ -16,6 +21,8 @@ dependencies {
 
     implementation(libs.kotlin.reflect)
     implementation(libs.bundles.kotlin.coroutines)
+
+    implementation(libs.keventbus)
 
     testImplementation(kotlin("test"))
 }

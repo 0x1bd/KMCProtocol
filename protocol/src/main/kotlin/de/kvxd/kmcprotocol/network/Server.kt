@@ -1,11 +1,14 @@
 package de.kvxd.kmcprotocol.network
 
+import com.kvxd.eventbus.Event
+import com.kvxd.eventbus.EventBus
 import de.kvxd.kmcprotocol.MinecraftProtocol
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import kotlinx.coroutines.*
+import java.io.IOException
 import java.util.*
 
 class Server(
@@ -17,117 +20,104 @@ class Server(
     private val selectorManager = ActorSelectorManager(Dispatchers.IO)
     private lateinit var socket: ServerSocket
 
-    // Thread-safe session collection
-    private val sessions: MutableSet<Session> = Collections.synchronizedSet(mutableSetOf<Session>())
+    private val sessions = Collections.synchronizedSet(mutableSetOf<Session>())
+    private val boundDeferred = CompletableDeferred<Unit>()
 
-    private val listeners = mutableSetOf<ServerListener>()
+    val eventBus = EventBus.create()
+
+    class BoundEvent : Event
+    class ClosingEvent : Event
+    class ErrorEvent(val throwable: Throwable) : Event
+    class SessionConnectedEvent(val session: Session) : Event
+    class SessionDisconnectedEvent(val session: Session) : Event
 
     suspend fun bind() {
-        socket = aSocket(selectorManager).tcp().bind(address)
-        listeners.forEach { it.serverBound() }
+        try {
+            socket = aSocket(selectorManager).tcp().bind(address)
+            eventBus.post(BoundEvent())
+            boundDeferred.complete(Unit)
 
-        val serverLoop: suspend CoroutineScope.() -> Unit = {
-            try {
-                while (!socket.isClosed) {
-                    val sessionSocket = socket.accept()
-                    Session(sessionSocket, protocol).also { session ->
-                        sessions.add(session)
-                        listeners.forEach { it.sessionConnected(session) }
-                    }
+            while (isActive()) {
+                val sessionSocket = try {
+                    socket.accept()
+                } catch (e: CancellationException) {
+                    break
+                } catch (e: Exception) {
+                    eventBus.post(ErrorEvent(e))
+                    break
                 }
-            } catch (e: Exception) {
-                if (e !is CancellationException && !socket.isClosed) { // TODO: Closing logic
-                    listeners.forEach { it.error(e) }
+
+                Session(sessionSocket, protocol).also { session ->
+                    sessions.add(session)
+                    eventBus.post(SessionConnectedEvent(session))
                 }
-            } finally {
-                close()
             }
+        } finally {
+            close()
         }
-
-        serverLoop(this.scope)
     }
 
+    suspend fun awaitBound() = boundDeferred.await()
+
     fun close() {
-        if (!::socket.isInitialized || socket.isClosed || job.isCancelled) {
-            return // Already closed or not initialized
-        }
+        if (!::socket.isInitialized || socket.isClosed || job.isCancelled) return
 
-        listeners.forEach { it.serverClosing() }
-
-        // Cancel ongoing coroutines
+        eventBus.post(ClosingEvent())
         job.cancel()
 
-        // Close sessions before the socket and selector manager
         runBlocking {
             sessions.toSet().forEach { it.close() }
+            try {
+                socket.close()
+            } catch (e: IOException) {
+                // Ignore close errors
+            }
         }
-
-        socket.close()
         selectorManager.close()
     }
 
-    fun addListener(serverListener: ServerListener) {
-        listeners.add(serverListener)
-    }
-
-    fun removeListener(serverListener: ServerListener) {
-        listeners.remove(serverListener)
-    }
-
-    open class ServerListener {
-        open fun serverBound() {}
-        open fun serverClosing() {}
-
-        open fun sessionConnected(session: Session) {}
-        open fun sessionDisconnected(session: Session) {}
-
-
-        open fun error(throwable: Throwable) {}
-    }
-
-    open class SessionListener {
-        open fun connected() {}
-        open fun disconnected() {}
-
-        open suspend fun packetReceived(packet: MinecraftPacket) {}
-        open suspend fun packetError(error: Throwable) {}
-    }
+    private fun isActive() = !socket.isClosed && !job.isCancelled
 
     inner class Session(
         private val socket: Socket,
         private val protocol: MinecraftProtocol
     ) : CoroutineScope by CoroutineScope(SupervisorJob() + Dispatchers.IO) {
 
-        private val listeners = mutableSetOf<SessionListener>()
-
         private val writeChannel = socket.openWriteChannel(autoFlush = true)
         private val readChannel = socket.openReadChannel()
 
+        val eventBus = EventBus.create()
+        private val sessionJob = CompletableDeferred<Unit>()
+
+        inner class ConnectedEvent : Event
+        inner class DisconnectedEvent : Event
+        inner class PacketReceivedEvent(val packet: MinecraftPacket) : Event
+        inner class ErrorEvent(val throwable: Throwable) : Event
+
         init {
-            listeners.forEach { it.connected() }
-            launch { handleConnection() }
-        }
-
-        fun addListener(serverListener: SessionListener) {
-            listeners.add(serverListener)
-        }
-
-        fun removeListener(serverListener: SessionListener) {
-            listeners.remove(serverListener)
+            eventBus.post(ConnectedEvent())
+            launch {
+                try {
+                    handleConnection()
+                } finally {
+                    cleanup()
+                }
+            }
         }
 
         private suspend fun handleConnection() {
             try {
-                while (isActive) {
-                    val packet = protocol.packetFormat.receive(readChannel, protocol, Direction.SERVERBOUND)
-                    if (packet != null) {
-                        listeners.forEach { it.packetReceived(packet) }
+                while (isActive && !readChannel.isClosedForRead) {
+                    val packet = try {
+                        protocol.packetFormat.receive(readChannel, protocol, Direction.SERVERBOUND)
+                    } catch (e: Exception) {
+                        eventBus.post(ErrorEvent(e))
+                        break
                     }
+                    packet?.let { eventBus.post(PacketReceivedEvent(it)) }
                 }
-            } catch (e: Exception) {
-                listeners.forEach { it.packetError(e) }
             } finally {
-                cleanup()
+                sessionJob.complete(Unit)
             }
         }
 
@@ -135,21 +125,28 @@ class Server(
             try {
                 protocol.packetFormat.send(packet, writeChannel, protocol)
             } catch (e: Exception) {
-                listeners.forEach { it.packetError(e) }
+                eventBus.post(ErrorEvent(e))
                 close()
+                throw e
             }
         }
 
         private fun cleanup() {
-            close()
             sessions.remove(this)
-            listeners.forEach { it.disconnected() }
-            this@Server.listeners.forEach { it.sessionDisconnected(this@Session) }
+            eventBus.post(DisconnectedEvent())
+            this@Server.eventBus.post(SessionDisconnectedEvent(this))
+            close()
         }
 
         fun close() {
-            cancel("Session closed")
-            socket.close()
+            coroutineContext.cancel()
+            try {
+                socket.close()
+            } catch (e: IOException) {
+                // Ignore close errors
+            }
         }
+
+        suspend fun awaitTermination() = sessionJob.await()
     }
 }

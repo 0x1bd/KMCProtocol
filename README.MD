@@ -1,4 +1,6 @@
 # KMCProtocol
+
+# Reminder: RESET PROTOCOL STATE FOR NEW CLIENT AND KEEP MAP OF STATES FOR CLIENT
 KMCProtocol is a kotlin library which implements the minecraft java protocol.
 
 ## Features

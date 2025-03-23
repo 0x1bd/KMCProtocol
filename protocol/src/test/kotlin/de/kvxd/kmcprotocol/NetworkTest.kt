@@ -8,10 +8,10 @@ import de.kvxd.kmcprotocol.network.Server
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
 import de.kvxd.kmcprotocol.packet.PacketMetadata
-import io.ktor.network.sockets.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.test.assertTrue
 
 class NetworkTest {
 
@@ -45,62 +45,105 @@ class NetworkTest {
         }
     }
 
+    private fun createProtocol() = MinecraftProtocol {
+        registerPacket(ServerboundTestPacket::class, ServerboundTestPacket.CODEC)
+        registerPacket(ClientboundTestPacket::class, ClientboundTestPacket.CODEC)
+    }
+
     @Test
-    fun `test full networking`() {
-        runBlocking {
+    fun `client server connection flow`() = runTest {
+        val server = Server(protocol = createProtocol())
 
-            launch {
-                val protocol = MinecraftProtocol {
-                    registerPacket(ServerboundTestPacket::class, ServerboundTestPacket.CODEC)
-                    registerPacket(ClientboundTestPacket::class, ClientboundTestPacket.CODEC)
-                }
+        var clientConnected = false
+        var clientDisconnected = false
 
-                val server = Server(protocol = protocol)
+        var serverBound = false
+        var serverClosed = false
 
-                server.addListener(object : Server.ServerListener() {
-
-                    override fun sessionConnected(session: Server.Session) {
-                        session.addListener(object : Server.SessionListener() {
-                            override suspend fun packetReceived(packet: MinecraftPacket) {
-                                println("Client to server: $packet")
-
-                                session.send(ClientboundTestPacket("Hello, World!"))
-                            }
-                        })
-                    }
-                })
-
-                server.bind()
+        server.addListener(object : Server.ServerListener() {
+            override fun serverBound() {
+                serverBound = true
             }
 
-            launch {
-                val protocol = MinecraftProtocol {
-                    registerPacket(ServerboundTestPacket::class, ServerboundTestPacket.CODEC)
-                    registerPacket(ClientboundTestPacket::class, ClientboundTestPacket.CODEC)
-                }
-
-                val client = Client(InetSocketAddress("localhost", 25565), protocol)
-
-                client.addListener(object : Client.ClientListener() {
-
-                    override fun packetReceived(packet: MinecraftPacket) {
-                        println("Client received $packet")
-                    }
-
-                    override fun packetSent(packet: MinecraftPacket) {
-                        println("Client sent: $packet")
-                    }
-
-                })
-
-                client.connect()
-
-                client.send(
-                    ServerboundTestPacket(
-                        769,
-                    )
-                )
+            override fun serverClosing() {
+                serverClosed = true
             }
+
+            override fun sessionConnected(session: Server.Session) {
+                clientConnected = true
+            }
+
+            override fun sessionDisconnected(session: Server.Session) {
+                clientDisconnected = true
+            }
+
+            override fun error(throwable: Throwable) {
+                throwable.printStackTrace()
+            }
+        })
+
+        server.bind()
+
+        launch {
+            val client = Client(protocol = createProtocol())
+
+            client.connect()
+            client.disconnect()
+        }.join() // Wait for client to finish
+
+        server.close()
+
+        assertTrue(clientConnected)
+        assertTrue(clientDisconnected)
+
+        assertTrue(serverBound)
+        assertTrue(serverClosed)
+    }
+
+    @Test
+    fun `client server packet exchange`() = runTest {
+        val server = Server(protocol = createProtocol())
+
+        var clientGotPacket = false
+        var serverGotPacket = false
+
+        server.addListener(object : Server.ServerListener() {
+            override fun sessionConnected(session: Server.Session) {
+                session.addListener(object : Server.SessionListener() {
+                    override suspend fun packetReceived(packet: MinecraftPacket) {
+                        serverGotPacket = true
+
+                        println("Server")
+
+                        session.send(ClientboundTestPacket("Hello, world!"))
+                    }
+                })
+            }
+        })
+
+        launch {
+            server.bind()
+        }
+
+        launch {
+            val client = Client(protocol = createProtocol())
+
+            client.addListener(object : Client.ClientListener() {
+                override fun packetReceived(packet: MinecraftPacket) {
+                    clientGotPacket = true
+
+                    println("Client")
+
+                    server.close()
+
+                    assertTrue { clientGotPacket }
+                    assertTrue { serverGotPacket }
+                }
+            })
+
+            client.connect()
+
+            client.send(ServerboundTestPacket(42))
         }
     }
 

@@ -11,8 +11,9 @@ import java.util.*
 class Server(
     private val address: SocketAddress = InetSocketAddress("localhost", 25565),
     val protocol: MinecraftProtocol
-) : CoroutineScope by CoroutineScope(SupervisorJob() + Dispatchers.IO) {
-
+) {
+    private val job = SupervisorJob()
+    private val scope = CoroutineScope(job + Dispatchers.IO)
     private val selectorManager = ActorSelectorManager(Dispatchers.IO)
     private lateinit var socket: ServerSocket
 
@@ -23,29 +24,46 @@ class Server(
 
     suspend fun bind() {
         socket = aSocket(selectorManager).tcp().bind(address)
-
         listeners.forEach { it.serverBound() }
 
-        try {
-            while (isActive) {
-                val sessionSocket = socket.accept()
-                Session(sessionSocket, protocol).also { session ->
-                    sessions.add(session)
-                    listeners.forEach { it.sessionConnected(session) }
+        val serverLoop: suspend CoroutineScope.() -> Unit = {
+            try {
+                while (!socket.isClosed) {
+                    val sessionSocket = socket.accept()
+                    Session(sessionSocket, protocol).also { session ->
+                        sessions.add(session)
+                        listeners.forEach { it.sessionConnected(session) }
+                    }
                 }
+            } catch (e: Exception) {
+                if (e !is CancellationException && !socket.isClosed) { // TODO: Closing logic
+                    listeners.forEach { it.error(e) }
+                }
+            } finally {
+                close()
             }
-        } catch (e: CancellationException) {
-            println("Server binding cancelled")
         }
+
+        serverLoop(this.scope)
     }
 
     fun close() {
+        if (!::socket.isInitialized || socket.isClosed || job.isCancelled) {
+            return // Already closed or not initialized
+        }
+
         listeners.forEach { it.serverClosing() }
 
-        cancel("Server shutdown")
+        // Cancel ongoing coroutines
+        job.cancel()
+
+        // Close sessions before the socket and selector manager
+        runBlocking {
+            sessions.toSet().forEach { it.close() }
+        }
+
         socket.close()
         selectorManager.close()
-        sessions.toSet().forEach { it.close() }
     }
 
     fun addListener(serverListener: ServerListener) {
@@ -62,6 +80,9 @@ class Server(
 
         open fun sessionConnected(session: Session) {}
         open fun sessionDisconnected(session: Session) {}
+
+
+        open fun error(throwable: Throwable) {}
     }
 
     open class SessionListener {
@@ -69,6 +90,7 @@ class Server(
         open fun disconnected() {}
 
         open suspend fun packetReceived(packet: MinecraftPacket) {}
+        open suspend fun packetError(error: Throwable) {}
     }
 
     inner class Session(
@@ -78,7 +100,7 @@ class Server(
 
         private val listeners = mutableSetOf<SessionListener>()
 
-        private val writeChannel = socket.openWriteChannel()
+        private val writeChannel = socket.openWriteChannel(autoFlush = true)
         private val readChannel = socket.openReadChannel()
 
         init {
@@ -96,26 +118,16 @@ class Server(
 
         private suspend fun handleConnection() {
             try {
-                coroutineScope {
-                    launch { readPackets() }
-                }
-            } finally {
-                close()
-                sessions.remove(this)
-                listeners.forEach { it.disconnected() }
-                this@Server.listeners.forEach { it.sessionDisconnected(this) }
-            }
-        }
-
-        private suspend fun readPackets() {
-            try {
                 while (isActive) {
-                    protocol.packetFormat.receive(readChannel, protocol, Direction.SERVERBOUND)?.let { packet ->
+                    val packet = protocol.packetFormat.receive(readChannel, protocol, Direction.SERVERBOUND)
+                    if (packet != null) {
                         listeners.forEach { it.packetReceived(packet) }
                     }
                 }
             } catch (e: Exception) {
-                println("Error reading packets: ${e.message}")
+                listeners.forEach { it.packetError(e) }
+            } finally {
+                cleanup()
             }
         }
 
@@ -123,15 +135,21 @@ class Server(
             try {
                 protocol.packetFormat.send(packet, writeChannel, protocol)
             } catch (e: Exception) {
-                println("Error sending packet: ${e.message}")
+                listeners.forEach { it.packetError(e) }
                 close()
             }
+        }
+
+        private fun cleanup() {
+            close()
+            sessions.remove(this)
+            listeners.forEach { it.disconnected() }
+            this@Server.listeners.forEach { it.sessionDisconnected(this@Session) }
         }
 
         fun close() {
             cancel("Session closed")
             socket.close()
-            listeners.forEach { it.disconnected() }
         }
     }
 }

@@ -68,8 +68,14 @@ class Client(
 
     fun disconnect() {
         listeners.forEach { it.disconnecting() }
-        scope.cancel() // Cancel the coroutine scope
-        socket.close()
+
+        scope.cancel("Client disconnecting")
+
+        runBlocking {
+            socket.close()
+        }
+
         selectorManager.close()
     }
+
 }

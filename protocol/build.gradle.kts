@@ -10,14 +10,12 @@ repositories {
 }
 
 dependencies {
-    implementation(libs.ktor.network)
-    implementation(libs.ktor.network.tls)
+    implementation(libs.bundles.ktor)
 
-    implementation(libs.adventure.text.serializer.gson)
-    implementation(libs.cloudburst.nbt)
+    implementation(libs.bundles.serialization)
 
     implementation(libs.kotlin.reflect)
-    implementation(libs.kotlin.coroutines)
+    implementation(libs.bundles.kotlin.coroutines)
 
     testImplementation(kotlin("test"))
 }

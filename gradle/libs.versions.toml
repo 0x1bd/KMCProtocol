@@ -8,6 +8,7 @@ cloudburst-nbt = "3.0.0.Final"
 [libraries]
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
 kotlin-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlin-coroutines" }
+kotlin-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlin-coroutines" }
 
 ktor-network = { module = "io.ktor:ktor-network", version.ref = "ktor" }
 ktor-network-tls = { module = "io.ktor:ktor-network-tls", version.ref = "ktor" }
@@ -16,6 +17,10 @@ cloudburst-nbt = { module = "org.cloudburstmc:nbt", version.ref = "cloudburst-nb
 
 adventure-text-serializer-gson = { module = "net.kyori:adventure-text-serializer-gson", version.ref = "adventure" }
 
+[bundles]
+kotlin-coroutines = ["kotlin-coroutines", "kotlin-coroutines-test"]
+ktor = ["ktor-network", "ktor-network-tls"]
+serialization = ["cloudburst-nbt", "adventure-text-serializer-gson"]
+
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

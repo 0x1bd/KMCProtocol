@@ -82,21 +82,25 @@ class NetworkTest {
             }
         })
 
-        server.bind()
+        launch {
+            server.bind()
+        }
 
         launch {
             val client = Client(protocol = createProtocol())
 
             client.connect()
             client.disconnect()
+
+
+            assertTrue(clientConnected)
+
+            assertTrue(serverBound)
         }.join() // Wait for client to finish
 
         server.close()
 
-        assertTrue(clientConnected)
         assertTrue(clientDisconnected)
-
-        assertTrue(serverBound)
         assertTrue(serverClosed)
     }
 

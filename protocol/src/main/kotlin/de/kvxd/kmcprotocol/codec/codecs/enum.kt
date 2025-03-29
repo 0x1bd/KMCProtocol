@@ -4,18 +4,18 @@ import de.kvxd.kmcprotocol.codec.ElementCodec
 import io.ktor.utils.io.*
 import kotlin.reflect.KClass
 
-class EnumCodec<T : Enum<T>>(private val enumClass: KClass<T>, private val offset: Int = 0) : ElementCodec<T> {
+class EnumCodec<T : Enum<T>>(private val enumClass: KClass<T>) : ElementCodec<T> {
 
     override suspend fun encode(channel: ByteWriteChannel, value: T) {
-        VarIntCodec.encode(channel, value.ordinal + offset)
+        VarIntCodec.encode(channel, value.ordinal)
     }
 
     override suspend fun decode(channel: ByteReadChannel): T {
-        val ordinal = VarIntCodec.decode(channel) + offset
+        val ordinal = VarIntCodec.decode(channel)
         return enumClass.java.enumConstants[ordinal]
     }
 }
 
-inline fun <reified T : Enum<T>> enumCodec(offset: Int = 0): EnumCodec<T> {
-    return EnumCodec(T::class, offset)
+inline fun <reified T : Enum<T>> enumCodec(): EnumCodec<T> {
+    return EnumCodec(T::class)
 }

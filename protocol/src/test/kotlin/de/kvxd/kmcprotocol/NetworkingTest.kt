@@ -1,108 +1,69 @@
 package de.kvxd.kmcprotocol
 
-import de.kvxd.kmcprotocol.network.Client
-import de.kvxd.kmcprotocol.network.Server
+import com.kvxd.eventbus.handler
+import de.kvxd.kmcprotocol.network.client.CConnected
+import de.kvxd.kmcprotocol.network.client.CDisconnected
+import de.kvxd.kmcprotocol.network.client.CPacketReceived
+import de.kvxd.kmcprotocol.network.client.Client
+import de.kvxd.kmcprotocol.network.server.*
 import de.kvxd.kmcprotocol.packets.handshake.serverbound.NextState
 import de.kvxd.kmcprotocol.packets.handshake.serverbound.ServerboundHandshakePacket
-import de.kvxd.kmcprotocol.packets.handshake.serverbound.toProtocolState
-import de.kvxd.kmcprotocol.packets.status.clientbound.ClientboundPongResponsePacket
-import de.kvxd.kmcprotocol.packets.status.clientbound.ClientboundStatusResponsePacket
-import de.kvxd.kmcprotocol.packets.status.clientbound.StatusResponse
-import de.kvxd.kmcprotocol.packets.status.serverbound.ServerboundPingRequestPacket
-import de.kvxd.kmcprotocol.packets.status.serverbound.ServerboundStatusRequestPacket
+import io.ktor.network.sockets.*
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import java.time.Duration
+import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalUnit
 import kotlin.test.Test
 
 class NetworkingTest {
 
     @Test
-    fun `vanilla-like status flow`() = runTest {
-        val server = Server(protocol = defaultProtocol())
+    fun `test event order`() = runTest {
+        val order = mutableListOf<String>()
 
-        server.eventBus.handler(Server.Events.ServerBound::class) {
-            println("Server bound!")
-        }
+        val expected = mutableListOf(
+            "SrvServerBound",
+            "SrvSessionConnected",
+            "CConnected",
+            "SPacketReceived",
+            "CPacketReceived",
+            "CDisconnected",
+            "SConnectionClosed"
+        )
 
-        server.eventBus.handler(Server.Events.SessionConnected::class) { sessionConnected ->
-            println("Session has connected: ${sessionConnected.session.socket.remoteAddress}")
+        val server = Server()
 
-            sessionConnected.session.eventBus.handler(Server.SessionEvents.PacketReceived::class) { packetReceived ->
-                println("Session has sent packet: ${packetReceived.packet}")
+        server.handler<SrvServerBound> { order.add("SrvServerBound") }
+        server.handler<SrvSessionConnected> {
+            order.add("SrvSessionConnected")
 
-                val packet = packetReceived.packet
-
-                if (packet is ServerboundHandshakePacket) {
-                    val state = packet.nextState.toProtocolState()
-                    server.updateProtocolState(state)
-
-                    println("Handshake packet received. Switching state to $state")
-                }
-
-                if (packet is ServerboundStatusRequestPacket) {
-                    println("Received status request packet. Responding.")
-
-                    sessionConnected.session.send(
-                        ClientboundStatusResponsePacket(StatusResponse())
-                    )
-                }
-
-                if (packet is ServerboundPingRequestPacket) {
-                    println("Received ping request packet. Responding")
-
-                    sessionConnected.session.send(
-                        ClientboundPongResponsePacket(packet.timestamp)
-                    )
-                }
-            }
-        }
-
-        server.eventBus.handler(Server.Events.SessionDisconnected::class) {
-            println("Session has disconnected")
+            it.session.handler<SPacketReceived> { order.add("SPacketReceived") }
+            it.session.handler<SConnectionClosed> { order.add("SConnectionClosed") }
         }
 
         launch {
             server.bind()
         }
-
         server.awaitBound()
 
+        val client = Client(InetSocketAddress(hostname = "localhost", port = 25565), defaultProtocol())
 
-        val client = Client(protocol = defaultProtocol())
-
-        client.eventBus.handler(Client.Events.Connected::class) {
-            println("Client has connected")
-        }
-
-        client.eventBus.handler(Client.Events.Disconnected::class) {
-            println("Client has disconnected")
-        }
-
-        client.eventBus.handler(Client.Events.PacketReceivedEvent::class) { event ->
-            println("Client received packet: ${event.packet}")
-        }
+        client.handler<CConnected> { order.add("CConnected") }
+        client.handler<CDisconnected> { order.add("CDisconnected") }
+        client.handler<CPacketReceived> { order.add("CPacketReceived") }
 
         launch {
             client.connect()
         }
-
         client.awaitConnected()
 
+        client.send(ServerboundHandshakePacket(0, "", 0, NextState.Status))
 
-        client.send(
-            ServerboundHandshakePacket(
-                LATEST_PROTOCOL_VERSION,
-                "localhost",
-                25565,
-                NextState.Status
-            )
-        )
-
-        client.updateProtocolState(ProtocolState.STATUS)
-
-        client.send(
-            ServerboundStatusRequestPacket()
-        )
+        delay(10000)
+        println("bob")
     }
 
 }

@@ -41,7 +41,7 @@ data class ServerboundHandshakePacket(
             element(ServerboundHandshakePacket::protocolVersion, VarIntCodec)
             element(ServerboundHandshakePacket::serverAddress, StringCodec)
             element(ServerboundHandshakePacket::serverPort, UShortCodec)
-            element(ServerboundHandshakePacket::nextState, enumCodec(offset = -1)) // Offset one
+            element(ServerboundHandshakePacket::nextState, enumCodec())
         }
     }
 

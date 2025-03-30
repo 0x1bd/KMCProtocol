@@ -5,6 +5,7 @@ import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
 import de.kvxd.kmcprotocol.packet.PacketFormat
 import de.kvxd.kmcprotocol.packet.PacketMetadata
+import de.kvxd.kmcprotocol.packet.format.Compressed
 import de.kvxd.kmcprotocol.packet.format.Uncompressed
 import kotlin.reflect.KClass
 import kotlin.reflect.full.findAnnotations
@@ -16,6 +17,14 @@ class MinecraftProtocol(initPacketRegistry: PacketRegistry.() -> Unit) {
     var registry: PacketRegistry
 
     var packetFormat: PacketFormat = Uncompressed
+
+    fun enableCompression(threshold: Int = 256) {
+        packetFormat = Compressed(threshold)
+    }
+
+    fun disableCompression() {
+        packetFormat = Uncompressed
+    }
 
     init {
         registry = PacketRegistry().apply(initPacketRegistry)
@@ -56,6 +65,17 @@ class MinecraftProtocol(initPacketRegistry: PacketRegistry.() -> Unit) {
                 ?: throw IllegalArgumentException("No packet registered with ID $id, direction $direction, and state $state")
             return Pair(entry.codec, entry.metadata)
         }
+
+        fun getPacketDataByIdOrNull(
+            id: Int,
+            direction: Direction,
+            state: ProtocolState
+        ): Pair<PacketCodec<*>, PacketMetadata>? =
+            try {
+                getPacketDataById(id, direction, state)
+            } catch (e: Exception) {
+                null
+            }
 
         private fun missingError(packet: MinecraftPacket): Nothing {
             val available = classToEntry.keys.joinToString { it.simpleName ?: "Unknown" }

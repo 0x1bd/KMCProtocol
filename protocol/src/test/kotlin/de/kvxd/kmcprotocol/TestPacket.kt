@@ -92,6 +92,39 @@ data class TestPacket(
                 ),
                 TestEnum.Four
             )
+
+        // Generates a large (> 256 bytes) packet
+        fun generateLargeTestPacket(): TestPacket =
+            TestPacket(
+                true,
+                0.toByte(),
+                0.0,
+                0f,
+                0,
+                0L,
+                0.toShort(),
+                StringBuilder()
+                    .apply {
+                        repeat(16) {
+                            append("Hello ")
+                        }
+                    }
+                    .toString(),
+                0,
+                0L,
+                UUID.randomUUID(),
+                Component.text("Hello, World"),
+                Component.text("Hello, World"),
+                Component.text("Hello, World")
+                    .style(Style.style(TextColor.color(255, 0, 255), ClickEvent.openUrl("https://0x1bd.github.io"))),
+                Vec3i(42),
+                listOf(
+                    Vec3i(1),
+                    Vec3i(2),
+                    Vec3i(3)
+                ),
+                TestEnum.Four
+            )
     }
 
 }

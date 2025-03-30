@@ -2,6 +2,7 @@ package de.kvxd.kmcprotocol.codec.codecs
 
 import de.kvxd.kmcprotocol.codec.ElementCodec
 import io.ktor.utils.io.*
+import kotlinx.io.readByteArray
 import kotlin.experimental.and
 
 /** From Gabi's medium post. [Source](https://aripiprazole.medium.com/writing-a-minecraft-protocol-implementation-in-kotlin-9276c584bd42) **/
@@ -15,6 +16,13 @@ object VarIntCodec : ElementCodec<Int> {
             current = current ushr 7
             channel.writeByte(if (current != 0) (byte.toInt() or 0x80).toByte() else byte)
         } while (current != 0)
+    }
+
+    suspend fun encodeToBytes(value: Int): ByteArray {
+        val channel = ByteChannel(autoFlush = false)
+        encode(channel, value)
+        channel.flushAndClose()
+        return channel.readRemaining().readByteArray()
     }
 
     override suspend fun decode(channel: ByteReadChannel): Int {

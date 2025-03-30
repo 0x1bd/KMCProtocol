@@ -2,6 +2,7 @@ package de.kvxd.kmcprotocol
 
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.PacketFormat
+import de.kvxd.kmcprotocol.packet.format.Uncompressed
 import io.ktor.utils.io.*
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -19,9 +20,9 @@ class PacketFormatTest {
 
         val channel = ByteChannel()
 
-        PacketFormat.Uncompressed.send(packet, channel, protocol)
+        Uncompressed.send(packet, channel, protocol)
 
-        val received = PacketFormat.Uncompressed.receive(channel, protocol, Direction.SERVERBOUND)
+        val received = Uncompressed.receive(channel, protocol, Direction.SERVERBOUND)
 
         assertEquals(packet, received)
     }

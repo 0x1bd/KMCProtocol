@@ -5,8 +5,6 @@ import de.kvxd.kmcprotocol.MinecraftProtocol
 import de.kvxd.kmcprotocol.ProtocolState
 import de.kvxd.kmcprotocol.packet.Direction
 import de.kvxd.kmcprotocol.packet.MinecraftPacket
-import de.kvxd.kmcprotocol.packet.format.Encrypted
-import de.kvxd.kmcprotocol.packet.format.Uncompressed
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
@@ -58,10 +56,6 @@ abstract class Connection(
 
     fun state(state: ProtocolState) {
         protocol.state = state
-    }
-
-    fun enableEncryption(key: ByteArray) {
-        protocol.packetFormat = Encrypted(key, Uncompressed)
     }
 
     suspend fun send(packet: MinecraftPacket) {

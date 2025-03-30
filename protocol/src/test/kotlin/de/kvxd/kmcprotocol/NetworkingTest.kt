@@ -5,11 +5,8 @@ import de.kvxd.kmcprotocol.network.PacketReceived
 import de.kvxd.kmcprotocol.network.client.Client
 import de.kvxd.kmcprotocol.network.server.Server
 import de.kvxd.kmcprotocol.network.server.SessionConnected
-import de.kvxd.kmcprotocol.packet.format.Encrypted
 import de.kvxd.kmcprotocol.packets.handshake.serverbound.NextState
 import de.kvxd.kmcprotocol.packets.handshake.serverbound.ServerboundHandshakePacket
-import de.kvxd.kmcprotocol.packets.login.clientbound.ClientboundEncryptionRequestPacket
-import de.kvxd.kmcprotocol.packets.login.serverbound.ServerboundEncryptionResponsePacket
 import de.kvxd.kmcprotocol.packets.status.clientbound.ClientboundPongResponsePacket
 import de.kvxd.kmcprotocol.packets.status.clientbound.ClientboundStatusResponsePacket
 import de.kvxd.kmcprotocol.packets.status.clientbound.StatusResponse
@@ -90,87 +87,6 @@ class NetworkingTest {
                 assertNotNull(pongTimestamp, "Pong timestamp not received")
                 assertEquals(status, StatusResponse.VANILLA, "Status response not matching original")
                 assertEquals(69L, pongTimestamp, "Incorrect pong timestamp")
-            } finally {
-                client.disconnect()
-            }
-        } finally {
-            serverJob.cancelAndJoin()
-            server.close()
-        }
-    }
-
-    @Test
-    fun `test simple encryption`() = runTest(timeout = 5.seconds) {
-        val server = Server { defaultProtocol() }
-        val serverJob = launch(Dispatchers.IO) { server.bind() }
-
-        val key = Encrypted.generateKey()
-
-        try {
-            val encryptionComplete = CompletableDeferred<Unit>()
-
-            server.bus.handler<SessionConnected> { event ->
-
-                event.session.bus.handler<PacketReceived> { packetEvent ->
-                    when (val packet = packetEvent.packet) {
-                        is ServerboundHandshakePacket -> {
-                            event.session.state(ProtocolState.LOGIN)
-
-                            event.session.send(
-                                ClientboundEncryptionRequestPacket(
-                                    publicKey = key.public.encoded.toTypedArray(),
-                                    verifyToken = Encrypted.generateVerifyToken(),
-                                )
-                            )
-                        }
-
-                        is ServerboundEncryptionResponsePacket -> {
-                            event.session.enableEncryption(Encrypted.decryptSecret(key, packet.sharedSecret))
-
-                            encryptionComplete.complete(Unit)
-                        }
-                    }
-                }
-            }
-
-            val client = Client(InetSocketAddress("localhost", 25565))
-
-            try {
-                client.bus.handler<PacketReceived> { event ->
-                    when (val packet = event.packet) {
-                        is ClientboundEncryptionRequestPacket -> {
-                            val secret = Encrypted.generateSecret()
-
-                            val (encryptedSecret, encryptedToken) = Encrypted.decryptCombo(
-                                secret,
-                                packet.verifyToken,
-                                packet.publicKey
-                            )
-
-                            client.send(
-                                ServerboundEncryptionResponsePacket(
-                                    sharedSecret = encryptedSecret,
-                                    verifyToken = encryptedToken
-                                )
-                            )
-
-                            client.enableEncryption(secret)
-                        }
-                    }
-                }
-
-                client.send(
-                    ServerboundHandshakePacket(
-                        protocolVersion = 769,
-                        serverAddress = "localhost",
-                        serverPort = 25565,
-                        nextState = NextState.Login
-                    )
-                )
-                client.state(ProtocolState.LOGIN)
-
-                encryptionComplete.await()
-                println("Encryption handshake completed successfully")
             } finally {
                 client.disconnect()
             }

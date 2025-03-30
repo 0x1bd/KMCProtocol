@@ -27,7 +27,7 @@ class NetworkingTest {
 
     @Test
     fun `test vanilla ping flow`() = runTest(timeout = 5.seconds) {
-        val server = Server()
+        val server = Server { defaultProtocol() }
         val serverJob = launch(Dispatchers.IO) { server.bind() }
 
         try {

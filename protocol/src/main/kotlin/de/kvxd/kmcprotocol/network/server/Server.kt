@@ -2,7 +2,6 @@ package de.kvxd.kmcprotocol.network.server
 
 import com.kvxd.eventbus.EventBus
 import de.kvxd.kmcprotocol.MinecraftProtocol
-import de.kvxd.kmcprotocol.defaultProtocol
 import de.kvxd.kmcprotocol.network.Connection
 import de.kvxd.kmcprotocol.packet.Direction
 import io.ktor.network.selector.*
@@ -11,7 +10,8 @@ import kotlinx.coroutines.runBlocking
 import java.util.*
 
 class Server(
-    private val port: Int = 25565
+    private val port: Int = 25565,
+    private val sessionProtocol: () -> MinecraftProtocol
 ) {
 
     private lateinit var socket: ServerSocket
@@ -36,7 +36,7 @@ class Server(
             try {
                 val sessionSocket = socket.accept()
 
-                val session = ServerSession(sessionSocket, defaultProtocol())
+                val session = ServerSession(sessionSocket, sessionProtocol())
                 sessions.add(session)
 
                 bus.post(SessionConnected(session))

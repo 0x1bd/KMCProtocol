@@ -41,7 +41,7 @@ data class TestPacket(
     var nbtComponent: Component,
     var styledNbtComponent: Component,
     var position: Vec3i,
-    var array: List<Vec3i>,
+    var array: Array<Vec3i>,
     var enum: TestEnum
 ) : MinecraftPacket {
 
@@ -63,7 +63,7 @@ data class TestPacket(
             element(TestPacket::nbtComponent, NbtTextCodec)
             element(TestPacket::styledNbtComponent, NbtTextCodec)
             element(TestPacket::position, Vec3iCodec)
-            element(TestPacket::array, PrefixedArrayCodec(Vec3iCodec))
+            element(TestPacket::array, prefixedArray(Vec3iCodec))
             element(TestPacket::enum, enumCodec())
         }
 
@@ -85,7 +85,7 @@ data class TestPacket(
                 Component.text("Hello, World")
                     .style(Style.style(TextColor.color(255, 0, 255), ClickEvent.openUrl("https://0x1bd.github.io"))),
                 Vec3i(42),
-                listOf(
+                arrayOf(
                     Vec3i(1),
                     Vec3i(2),
                     Vec3i(3)
@@ -118,13 +118,61 @@ data class TestPacket(
                 Component.text("Hello, World")
                     .style(Style.style(TextColor.color(255, 0, 255), ClickEvent.openUrl("https://0x1bd.github.io"))),
                 Vec3i(42),
-                listOf(
+                arrayOf(
                     Vec3i(1),
                     Vec3i(2),
                     Vec3i(3)
                 ),
                 TestEnum.Four
             )
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as TestPacket
+
+        if (boolean != other.boolean) return false
+        if (byte != other.byte) return false
+        if (double != other.double) return false
+        if (float != other.float) return false
+        if (int != other.int) return false
+        if (long != other.long) return false
+        if (short != other.short) return false
+        if (varInt != other.varInt) return false
+        if (varLong != other.varLong) return false
+        if (string != other.string) return false
+        if (uuid != other.uuid) return false
+        if (jsonComponent != other.jsonComponent) return false
+        if (nbtComponent != other.nbtComponent) return false
+        if (styledNbtComponent != other.styledNbtComponent) return false
+        if (position != other.position) return false
+        if (!array.contentEquals(other.array)) return false
+        if (enum != other.enum) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = boolean.hashCode()
+        result = 31 * result + byte
+        result = 31 * result + double.hashCode()
+        result = 31 * result + float.hashCode()
+        result = 31 * result + int
+        result = 31 * result + long.hashCode()
+        result = 31 * result + short
+        result = 31 * result + varInt
+        result = 31 * result + varLong.hashCode()
+        result = 31 * result + string.hashCode()
+        result = 31 * result + uuid.hashCode()
+        result = 31 * result + jsonComponent.hashCode()
+        result = 31 * result + nbtComponent.hashCode()
+        result = 31 * result + styledNbtComponent.hashCode()
+        result = 31 * result + position.hashCode()
+        result = 31 * result + array.contentHashCode()
+        result = 31 * result + enum.hashCode()
+        return result
     }
 
 }

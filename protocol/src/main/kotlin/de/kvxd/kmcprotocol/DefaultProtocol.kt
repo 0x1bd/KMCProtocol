@@ -1,6 +1,8 @@
 package de.kvxd.kmcprotocol
 
 import de.kvxd.kmcprotocol.packets.handshake.serverbound.ServerboundHandshakePacket
+import de.kvxd.kmcprotocol.packets.login.clientbound.ClientboundEncryptionRequestPacket
+import de.kvxd.kmcprotocol.packets.login.serverbound.ServerboundEncryptionResponsePacket
 import de.kvxd.kmcprotocol.packets.status.clientbound.ClientboundPongResponsePacket
 import de.kvxd.kmcprotocol.packets.status.clientbound.ClientboundStatusResponsePacket
 import de.kvxd.kmcprotocol.packets.status.serverbound.ServerboundPingRequestPacket
@@ -15,4 +17,6 @@ fun defaultProtocol() = MinecraftProtocol {
     registerPacket(ClientboundStatusResponsePacket::class, ClientboundStatusResponsePacket.CODEC)
     registerPacket(ServerboundPingRequestPacket::class, ServerboundPingRequestPacket.CODEC)
     registerPacket(ServerboundStatusRequestPacket::class, ServerboundStatusRequestPacket.CODEC)
+    registerPacket(ClientboundEncryptionRequestPacket::class, ClientboundEncryptionRequestPacket.CODEC)
+    registerPacket(ServerboundEncryptionResponsePacket::class, ServerboundEncryptionResponsePacket.CODEC)
 }

@@ -1,9 +1,7 @@
 package de.kvxd.kmcprotocol.packet
 
 import de.kvxd.kmcprotocol.MinecraftProtocol
-import de.kvxd.kmcprotocol.codec.codecs.VarIntCodec
 import io.ktor.utils.io.*
-import kotlinx.io.readByteArray
 
 interface PacketFormat {
 

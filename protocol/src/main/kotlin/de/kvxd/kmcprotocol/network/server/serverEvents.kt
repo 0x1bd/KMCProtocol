@@ -2,6 +2,7 @@ package de.kvxd.kmcprotocol.network.server
 
 import com.kvxd.eventbus.Event
 
-class SrvServerBound : Event
+data object ServerBound : Event
+data class ServerError(val cause: Throwable) : Event
 
-class SrvSessionConnected(val session: Server.Session) : Event
+data class SessionConnected(val session: Server.ServerSession) : Event

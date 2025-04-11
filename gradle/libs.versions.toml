@@ -26,3 +26,4 @@ serialization = ["cloudburst-nbt", "adventure-text-serializer-gson"]
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlinx-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

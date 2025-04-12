@@ -2,6 +2,7 @@ package de.kvxd.kmcprotocol.packets.handshake
 
 import de.kvxd.kmcprotocol.core.MinecraftPacket
 import de.kvxd.kmcprotocol.core.PacketMetadata
+import de.kvxd.kmcprotocol.core.ProtocolState
 import de.kvxd.kmcprotocol.core.variant.EValue
 import de.kvxd.kmcprotocol.core.variant.EVariant
 import de.kvxd.kmcprotocol.core.variant.NV
@@ -31,7 +32,14 @@ data class IntentionPacket(
         Login,
 
         @EValue(3)
-        Transfer
+        Transfer;
+
+        fun toProtocolState(): ProtocolState =
+            when (this) {
+                Status -> ProtocolState.Status
+                Login -> ProtocolState.Login
+                Transfer -> ProtocolState.Login
+            }
     }
 
 }

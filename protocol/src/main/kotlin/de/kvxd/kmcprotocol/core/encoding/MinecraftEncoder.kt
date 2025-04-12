@@ -2,9 +2,10 @@ package de.kvxd.kmcprotocol.core.encoding
 
 import de.kvxd.kmcprotocol.core.ProtocolData
 import de.kvxd.kmcprotocol.core.variant.*
-import kotlinx.io.Sink
-import kotlinx.io.writeDouble
-import kotlinx.io.writeFloat
+import io.ktor.utils.io.*
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -12,33 +13,42 @@ import kotlinx.serialization.encoding.CompositeEncoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.SerializersModule
 
-class MinecraftEncoder(data: ProtocolData, private val sink: Sink) : Encoder, CompositeEncoder {
+class MinecraftEncoder(data: ProtocolData, private val channel: ByteWriteChannel) : Encoder, CompositeEncoder {
 
     override val serializersModule: SerializersModule = data.serializersModule
 
-    override fun encodeByte(value: Byte) = sink.writeByte(value)
-    override fun encodeBoolean(value: Boolean) = sink.writeByte(if (value) 0x01 else 0x00)
-    override fun encodeChar(value: Char) = sink.writeInt(value.code)
-    override fun encodeDouble(value: Double) = sink.writeDouble(value)
-    override fun encodeFloat(value: Float) = sink.writeFloat(value)
-    override fun encodeInt(value: Int) = sink.writeInt(value)
-    override fun encodeLong(value: Long) = sink.writeLong(value)
-    override fun encodeShort(value: Short) = sink.writeShort(value)
-    override fun encodeString(value: String) {
-        val bytes = value.toByteArray(Charsets.UTF_8)
-        sink.writeVarInt(bytes.size)
+    // Ensures sequential write ops
+    private val writeMutex = Mutex()
 
-        sink.write(bytes, 0, bytes.size)
+    private inline fun <T> write(crossinline block: suspend () -> T): T {
+        return runBlocking {
+            writeMutex.withLock { block() }
+        }
     }
 
-    override fun encodeEnum(enumDescriptor: SerialDescriptor, index: Int) {
+    override fun encodeByte(value: Byte) = write { channel.writeByte(value) }
+    override fun encodeBoolean(value: Boolean) = write { channel.writeByte(if (value) 0x01 else 0x00) }
+    override fun encodeChar(value: Char) = write { channel.writeInt(value.code) }
+    override fun encodeDouble(value: Double) = write { channel.writeDouble(value) }
+    override fun encodeFloat(value: Float) = write { channel.writeFloat(value) }
+    override fun encodeInt(value: Int) = write { channel.writeInt(value) }
+    override fun encodeLong(value: Long) = write { channel.writeLong(value) }
+    override fun encodeShort(value: Short) = write { channel.writeShort(value) }
+    override fun encodeString(value: String) = write {
+        val bytes = value.toByteArray(Charsets.UTF_8)
+        channel.writeVarInt(bytes.size)
+
+        channel.writeFully(bytes, 0, bytes.size)
+    }
+
+    override fun encodeEnum(enumDescriptor: SerialDescriptor, index: Int) = write {
         val annotation = enumDescriptor.getAnnotation<EVariant>()
 
         val variant = annotation?.kind ?: NumVariant.VarInt // fallback to VarInt
 
         val value = enumDescriptor.getElementAnnotationFromIndex<EValue>(index)?.value ?: index
 
-        NumVariant.encodeInt(variant, value, sink)
+        NumVariant.encodeInt(variant, value, channel)
     }
 
     override fun encodeByteElement(descriptor: SerialDescriptor, index: Int, value: Byte) = encodeByte(value)
@@ -47,18 +57,18 @@ class MinecraftEncoder(data: ProtocolData, private val sink: Sink) : Encoder, Co
     override fun encodeDoubleElement(descriptor: SerialDescriptor, index: Int, value: Double) = encodeDouble(value)
     override fun encodeFloatElement(descriptor: SerialDescriptor, index: Int, value: Float) = encodeFloat(value)
 
-    override fun encodeIntElement(descriptor: SerialDescriptor, index: Int, value: Int) {
+    override fun encodeIntElement(descriptor: SerialDescriptor, index: Int, value: Int) = write {
         val annotation = descriptor.getElementAnnotationFromIndex<NV>(index)
 
         val variant = annotation?.kind ?: NumVariant.VarInt
-        NumVariant.encodeInt(variant, value, sink)
+        NumVariant.encodeInt(variant, value, channel)
     }
 
-    override fun encodeLongElement(descriptor: SerialDescriptor, index: Int, value: Long) {
+    override fun encodeLongElement(descriptor: SerialDescriptor, index: Int, value: Long) = write {
         val annotation = descriptor.getElementAnnotationFromIndex<NV>(index)
 
         val variant = annotation?.kind ?: NumVariant.VarLong
-        NumVariant.encodeLong(variant, value, sink)
+        NumVariant.encodeLong(variant, value, channel)
     }
 
     override fun encodeShortElement(descriptor: SerialDescriptor, index: Int, value: Short) = encodeShort(value)

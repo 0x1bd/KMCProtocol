@@ -8,21 +8,17 @@ import de.kvxd.kmcprotocol.core.format.PacketFormat
 import de.kvxd.kmcprotocol.core.variant.readVarInt
 import de.kvxd.kmcprotocol.core.variant.writeVarInt
 import de.kvxd.kmcprotocol.network.Direction
-import io.ktor.utils.io.core.*
-import kotlinx.io.Buffer
-import kotlinx.io.Sink
-import kotlinx.io.Source
+import io.ktor.utils.io.*
 import kotlinx.io.readByteArray
 
 class Uncompressed(private val data: ProtocolData) : PacketFormat {
 
-    override fun send(packet: MinecraftPacket, sink: Sink) {
+    override suspend fun send(packet: MinecraftPacket, channel: ByteWriteChannel) {
         val metadata = data.registry.getPacketMetadata(data.state, packet) ?: error("Packet not registered")
 
-        val content = Buffer().apply {
+        val content = ByteChannel().apply {
             writeVarInt(metadata.id)
 
-            // serialize the actual packet using the registry
             val serializer = data.registry.getPacketSerializerByClass(data.state, packet::class)
             serializer!!.serialize(MinecraftEncoder(data, this), packet)
 
@@ -30,19 +26,21 @@ class Uncompressed(private val data: ProtocolData) : PacketFormat {
             close()
         }
 
-        sink.writeVarInt(content.size.toInt())
+        val contentBytes = content.readRemaining().readByteArray()
 
-        sink.writeFully(content.readByteArray())
-        sink.flush()
+        channel.writeVarInt(contentBytes.size)
+
+        channel.writeFully(contentBytes)
+        channel.flush()
     }
 
-    override fun receive(source: Source, expectedDirection: Direction): MinecraftPacket? {
-        val length = source.readVarInt()
-        val id = source.readVarInt()
+    override suspend fun receive(channel: ByteReadChannel, expectedDirection: Direction): MinecraftPacket? {
+        val length = channel.readVarInt()
+        val id = channel.readVarInt()
 
         val serializer = data.registry.getPacketSerializerById(data.state, id, expectedDirection)
 
-        return serializer!!.deserialize(MinecraftDecoder(data, source))
+        return serializer?.deserialize(MinecraftDecoder(data, channel))
     }
 
 }

@@ -2,10 +2,8 @@ package de.kvxd.kmcprotocol.core.encoding
 
 import de.kvxd.kmcprotocol.core.ProtocolData
 import de.kvxd.kmcprotocol.core.variant.*
-import io.ktor.utils.io.core.*
-import kotlinx.io.Source
-import kotlinx.io.readDouble
-import kotlinx.io.readFloat
+import io.ktor.utils.io.*
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -14,7 +12,7 @@ import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.modules.SerializersModule
 
-class MinecraftDecoder(data: ProtocolData, private val source: Source) : Decoder, CompositeDecoder {
+class MinecraftDecoder(data: ProtocolData, private val channel: ByteReadChannel) : Decoder, CompositeDecoder {
 
     override val serializersModule: SerializersModule = data.serializersModule
     private val indexStack = mutableListOf<Int>()
@@ -31,29 +29,29 @@ class MinecraftDecoder(data: ProtocolData, private val source: Source) : Decoder
         return currentIndex
     }
 
-    override fun decodeByte(): Byte = source.readByte()
-    override fun decodeBoolean(): Boolean = source.readByte().toInt() == 0x01
-    override fun decodeChar(): Char = source.readInt().toChar()
-    override fun decodeDouble(): Double = source.readDouble()
-    override fun decodeFloat(): Float = source.readFloat()
-    override fun decodeInt(): Int = source.readInt()
-    override fun decodeLong(): Long = source.readLong()
-    override fun decodeShort(): Short = source.readShort()
-    override fun decodeString(): String {
-        val length = source.readVarInt()
+    override fun decodeByte(): Byte = runBlocking { channel.readByte() }
+    override fun decodeBoolean(): Boolean = runBlocking { channel.readByte().toInt() == 0x01 }
+    override fun decodeChar(): Char = runBlocking { channel.readInt().toChar() }
+    override fun decodeDouble(): Double = runBlocking { channel.readDouble() }
+    override fun decodeFloat(): Float = runBlocking { channel.readFloat() }
+    override fun decodeInt(): Int = runBlocking { channel.readInt() }
+    override fun decodeLong(): Long = runBlocking { channel.readLong() }
+    override fun decodeShort(): Short = runBlocking { channel.readShort() }
+    override fun decodeString(): String = runBlocking {
+        val length = channel.readVarInt()
 
         val bytes = ByteArray(length)
-        source.readFully(bytes, 0, length)
+        channel.readFully(bytes, 0, length)
 
-        return String(bytes, Charsets.UTF_8)
+        return@runBlocking String(bytes, Charsets.UTF_8)
     }
 
-    override fun decodeEnum(enumDescriptor: SerialDescriptor): Int {
+    override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = runBlocking {
         val variant = enumDescriptor.getAnnotation<EVariant>()?.kind ?: NumVariant.VarInt
 
-        val value = NumVariant.decodeInt(variant, source)
+        val value = NumVariant.decodeInt(variant, channel)
 
-        return enumDescriptor.elementDescriptors
+        return@runBlocking enumDescriptor.elementDescriptors
             .withIndex()
             .singleOrNull { (i) ->
                 value == enumDescriptor
@@ -71,18 +69,18 @@ class MinecraftDecoder(data: ProtocolData, private val source: Source) : Decoder
     override fun decodeDoubleElement(descriptor: SerialDescriptor, index: Int): Double = decodeDouble()
     override fun decodeFloatElement(descriptor: SerialDescriptor, index: Int): Float = decodeFloat()
 
-    override fun decodeIntElement(descriptor: SerialDescriptor, index: Int): Int {
+    override fun decodeIntElement(descriptor: SerialDescriptor, index: Int): Int = runBlocking {
         val annotation = descriptor.getElementAnnotationFromIndex<NV>(index)
 
         val variant = annotation?.kind ?: NumVariant.VarInt
-        return NumVariant.decodeInt(variant, source)
+        return@runBlocking NumVariant.decodeInt(variant, channel)
     }
 
-    override fun decodeLongElement(descriptor: SerialDescriptor, index: Int): Long {
+    override fun decodeLongElement(descriptor: SerialDescriptor, index: Int): Long = runBlocking {
         val annotation = descriptor.getElementAnnotationFromIndex<NV>(index)
 
         val variant = annotation?.kind ?: NumVariant.VarLong
-        return NumVariant.decodeLong(variant, source)
+        return@runBlocking NumVariant.decodeLong(variant, channel)
     }
 
     override fun decodeShortElement(descriptor: SerialDescriptor, index: Int): Short = decodeShort()

@@ -1,8 +1,8 @@
 package de.kvxd.kmcprotocol.network.client
 
 import de.kvxd.kmcprotocol.core.ProtocolData
-import de.kvxd.kmcprotocol.network.Connection
 import de.kvxd.kmcprotocol.network.Direction
+import de.kvxd.kmcprotocol.network.conn.Connection
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import kotlinx.coroutines.Dispatchers
@@ -11,9 +11,9 @@ import kotlinx.coroutines.runBlocking
 
 class Client(
     address: SocketAddress,
-    data: ProtocolData
+    protocol: ProtocolData = ProtocolData()
 ) : Connection(
-    data,
+    protocol,
     Direction.Clientbound,
     createSocket(address)
 )

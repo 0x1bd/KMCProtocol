@@ -1,6 +1,7 @@
 package de.kvxd.kmcprotocol.core.variant
 
 import de.kvxd.kmcprotocol.core.variant.NumVariant.VarInt
+import io.ktor.utils.io.*
 import kotlinx.io.Sink
 import kotlinx.io.Source
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -23,36 +24,36 @@ enum class NumVariant {
 
     companion object {
 
-        fun encodeInt(variant: NumVariant, value: kotlin.Int, sink: Sink) {
+        suspend fun encodeInt(variant: NumVariant, value: kotlin.Int, channel: ByteWriteChannel) {
             when (variant) {
-                Int -> sink.writeInt(value)
-                VarInt -> sink.writeVarInt(value)
+                Int -> channel.writeInt(value)
+                VarInt -> channel.writeVarInt(value)
 
                 Long, VarLong -> error("Cannot encode int with long or varlong variant")
             }
         }
 
-        fun decodeInt(variant: NumVariant, source: Source): kotlin.Int =
+        suspend fun decodeInt(variant: NumVariant, channel: ByteReadChannel): kotlin.Int =
             when (variant) {
-                Int -> source.readInt()
-                VarInt -> source.readVarInt()
+                Int -> channel.readInt()
+                VarInt -> channel.readVarInt()
 
                 Long, VarLong -> error("Cannot decode int with long or varlong variant")
             }
 
-        fun encodeLong(variant: NumVariant, value: kotlin.Long, sink: Sink) {
+        suspend fun encodeLong(variant: NumVariant, value: kotlin.Long, channel: ByteWriteChannel) {
             when (variant) {
-                Long -> sink.writeLong(value)
-                VarLong -> sink.writeVarLong(value)
+                Long -> channel.writeLong(value)
+                VarLong -> channel.writeVarLong(value)
 
                 Int, VarInt -> error("Cannot encode long with int or varint variant")
             }
         }
 
-        fun decodeLong(variant: NumVariant, source: Source): kotlin.Long {
+        suspend fun decodeLong(variant: NumVariant, channel: ByteReadChannel): kotlin.Long {
             return when (variant) {
-                Long -> source.readLong()
-                VarLong -> source.readVarLong()
+                Long -> channel.readLong()
+                VarLong -> channel.readVarLong()
 
                 Int, VarInt -> error("Cannot decode long with int or varint variant")
             }
@@ -63,7 +64,7 @@ enum class NumVariant {
 
 }
 
-fun Sink.writeVarInt(value: Int) {
+suspend fun ByteWriteChannel.writeVarInt(value: Int) {
     var current = value
     do {
         val byte = (current and 0x7F).toByte()
@@ -72,7 +73,7 @@ fun Sink.writeVarInt(value: Int) {
     } while (current != 0)
 }
 
-fun Source.readVarInt(): Int {
+suspend fun ByteReadChannel.readVarInt(): Int {
     var offset = 0
     var value = 0
     var byte: Byte
@@ -89,7 +90,7 @@ fun Source.readVarInt(): Int {
     return value
 }
 
-fun Sink.writeVarLong(value: Long) {
+suspend fun ByteWriteChannel.writeVarLong(value: Long) {
     var current = value
     do {
         val byte = (current and 0x7F).toByte()
@@ -98,7 +99,7 @@ fun Sink.writeVarLong(value: Long) {
     } while (current != 0L)
 }
 
-fun Source.readVarLong(): Long {
+suspend fun ByteReadChannel.readVarLong(): Long {
     var offset = 0
     var value = 0L
     var byte: Byte

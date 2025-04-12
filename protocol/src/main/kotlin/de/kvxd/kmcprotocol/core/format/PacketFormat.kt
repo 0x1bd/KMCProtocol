@@ -2,14 +2,13 @@ package de.kvxd.kmcprotocol.core.format
 
 import de.kvxd.kmcprotocol.core.MinecraftPacket
 import de.kvxd.kmcprotocol.network.Direction
-import kotlinx.io.Sink
-import kotlinx.io.Source
+import io.ktor.utils.io.*
 
 interface PacketFormat {
 
-    fun send(packet: MinecraftPacket, sink: Sink)
-    fun receive(
-        source: Source,
+    suspend fun send(packet: MinecraftPacket, channel: ByteWriteChannel)
+    suspend fun receive(
+        channel: ByteReadChannel,
         expectedDirection: Direction
     ): MinecraftPacket?
 

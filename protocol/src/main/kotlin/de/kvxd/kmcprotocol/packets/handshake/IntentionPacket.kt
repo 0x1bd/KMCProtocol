@@ -24,13 +24,13 @@ data class IntentionPacket(
 
     @EVariant(NumVariant.VarInt)
     enum class NextState {
-        @EValue(0)
+        @EValue(1)
         Status,
 
-        @EValue(1)
+        @EValue(2)
         Login,
 
-        @EValue(2)
+        @EValue(3)
         Transfer
     }
 

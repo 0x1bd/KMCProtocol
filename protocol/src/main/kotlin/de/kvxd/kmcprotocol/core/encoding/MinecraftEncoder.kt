@@ -13,7 +13,8 @@ import kotlinx.serialization.encoding.CompositeEncoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.SerializersModule
 
-class MinecraftEncoder(data: ProtocolData, private val channel: ByteWriteChannel) : Encoder, CompositeEncoder {
+class MinecraftEncoder(private val data: ProtocolData, private val channel: ByteWriteChannel) : Encoder,
+    CompositeEncoder {
 
     override val serializersModule: SerializersModule = data.serializersModule
 
@@ -98,7 +99,12 @@ class MinecraftEncoder(data: ProtocolData, private val channel: ByteWriteChannel
         serializer: SerializationStrategy<T>,
         value: T
     ) {
-        encodeSerializableValue(serializer, value)
+        when {
+            descriptor.getElementAnnotations(index).filterIsInstance<UseJson>().isNotEmpty() ->
+                encodeString(data.json.encodeToString(serializer, value))
+
+            else -> encodeSerializableValue(serializer, value)
+        }
     }
 
     // Structure Methods

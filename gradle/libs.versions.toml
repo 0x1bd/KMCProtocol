@@ -5,6 +5,7 @@ ktor = "3.1.1"
 adventure = "4.19.0"
 cloudburst-nbt = "3.0.0.Final"
 keventbus = "1.3.2"
+kotlinx-serialization-json = "1.8.1"
 
 [libraries]
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
@@ -16,13 +17,14 @@ ktor-network-tls = { module = "io.ktor:ktor-network-tls", version.ref = "ktor" }
 
 cloudburst-nbt = { module = "org.cloudburstmc:nbt", version.ref = "cloudburst-nbt" }
 adventure-text-serializer-gson = { module = "net.kyori:adventure-text-serializer-gson", version.ref = "adventure" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization-json" }
 
 keventbus = { module = "com.github.0x1bd:KeventBus", version.ref = "keventbus" }
 
 [bundles]
 kotlin-coroutines = ["kotlin-coroutines", "kotlin-coroutines-test"]
 ktor = ["ktor-network", "ktor-network-tls"]
-serialization = ["cloudburst-nbt", "adventure-text-serializer-gson"]
+serialization = ["cloudburst-nbt", "adventure-text-serializer-gson", "kotlinx-serialization-json"]
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

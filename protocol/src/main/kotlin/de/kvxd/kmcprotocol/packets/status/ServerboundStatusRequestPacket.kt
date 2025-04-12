@@ -7,8 +7,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 @PacketMetadata(
-    0x00
-    ,
+    0x00,
     Direction.Serverbound
 )
 data object ServerboundStatusRequestPacket : MinecraftPacket

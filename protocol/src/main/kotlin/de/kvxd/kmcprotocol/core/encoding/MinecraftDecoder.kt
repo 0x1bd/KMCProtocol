@@ -12,7 +12,8 @@ import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.modules.SerializersModule
 
-class MinecraftDecoder(data: ProtocolData, private val channel: ByteReadChannel) : Decoder, CompositeDecoder {
+class MinecraftDecoder(private val data: ProtocolData, private val channel: ByteReadChannel) : Decoder,
+    CompositeDecoder {
 
     override val serializersModule: SerializersModule = data.serializersModule
     private val indexStack = mutableListOf<Int>()
@@ -120,7 +121,12 @@ class MinecraftDecoder(data: ProtocolData, private val channel: ByteReadChannel)
         deserializer: DeserializationStrategy<T>,
         previousValue: T?
     ): T =
-        decodeSerializableValue(deserializer)
+        when {
+            descriptor.getElementAnnotations(index).filterIsInstance<UseJson>().isNotEmpty() ->
+                data.json.decodeFromString(deserializer, decodeString())
+
+            else -> decodeSerializableValue(deserializer)
+        }
 
     override fun endStructure(descriptor: SerialDescriptor) {
         if (indexStack.isNotEmpty())

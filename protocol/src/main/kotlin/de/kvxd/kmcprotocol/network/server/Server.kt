@@ -1,64 +1,67 @@
 package de.kvxd.kmcprotocol.network.server
 
-import com.kvxd.eventbus.EventBus
-import de.kvxd.kmcprotocol.MinecraftProtocol
-import de.kvxd.kmcprotocol.network.Connection
-import de.kvxd.kmcprotocol.packet.Direction
+import de.kvxd.kmcprotocol.core.ProtocolData
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import java.util.*
 
 class Server(
-    private val port: Int = 25565,
-    private val sessionProtocol: () -> MinecraftProtocol
+    private val bindAddress: SocketAddress = InetSocketAddress("0.0.0.0", 25565),
+    private val sessionProtocolData: () -> ProtocolData = { ProtocolData() },
 ) {
-
     private lateinit var socket: ServerSocket
-    private val selectorManager = SelectorManager()
 
     private val sessions = Collections.synchronizedSet(mutableSetOf<ServerSession>())
 
-    val bus = EventBus()
+    private val callbacks = mutableSetOf<ServerCallback>()
 
-    init {
-        bus.onError = { cause -> cause.printStackTrace() }
+    fun addCallback(callback: ServerCallback) {
+        callbacks.add(callback)
+    }
+
+    fun removeCallback(callback: ServerCallback) {
+        callbacks.remove(callback)
+    }
+
+    private val boundDeferred = CompletableDeferred<Unit>()
+
+    suspend fun awaitBound() {
+        boundDeferred.await()
     }
 
     suspend fun bind() {
-        socket = aSocket(selectorManager)
+        socket = aSocket(ActorSelectorManager(Dispatchers.IO))
             .tcp()
-            .bind(port = port)
+            .bind(bindAddress)
 
-        bus.post(ServerBound)
+        boundDeferred.complete(Unit)
+        callbacks.forEach { it.onBound() }
 
         while (!socket.isClosed) {
             try {
                 val sessionSocket = socket.accept()
 
-                val session = ServerSession(sessionSocket, sessionProtocol())
+                val session = ServerSession(sessionSocket, sessionProtocolData())
                 sessions.add(session)
 
-                bus.post(SessionConnected(session))
+                callbacks.forEach { it.onSessionConnected(session) }
             } catch (e: Exception) {
-                bus.post(ServerError(e))
+                callbacks.forEach { it.onError(e) }
                 throw e
             }
         }
     }
 
-    fun close() {
-        runBlocking {
-            sessions.forEach { it.disconnect() }
-            sessions.clear()
+    fun close() = runBlocking {
+        callbacks.forEach { it.onClose() }
 
-            socket.close()
-        }
+        sessions.forEach { it.close() }
+        sessions.clear()
+
+        socket.close()
     }
-
-    inner class ServerSession(
-        socket: Socket,
-        protocol: MinecraftProtocol
-    ) : Connection(protocol, Direction.SERVERBOUND, socket)
 
 }

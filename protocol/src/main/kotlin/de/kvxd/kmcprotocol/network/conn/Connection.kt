@@ -3,12 +3,10 @@ package de.kvxd.kmcprotocol.network.conn
 import de.kvxd.kmcprotocol.core.MinecraftPacket
 import de.kvxd.kmcprotocol.core.ProtocolData
 import de.kvxd.kmcprotocol.network.Direction
-import de.kvxd.kmcprotocol.network.server.ServerCallback
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
 import kotlinx.io.EOFException
-import kotlinx.io.buffered
 
 abstract class Connection(
     val data: ProtocolData,

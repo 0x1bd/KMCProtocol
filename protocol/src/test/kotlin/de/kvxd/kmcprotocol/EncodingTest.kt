@@ -3,6 +3,7 @@ package de.kvxd.kmcprotocol
 import de.kvxd.kmcprotocol.core.ProtocolData
 import de.kvxd.kmcprotocol.core.encoding.MinecraftDecoder
 import de.kvxd.kmcprotocol.core.encoding.MinecraftEncoder
+import de.kvxd.kmcprotocol.network.Direction
 import de.kvxd.kmcprotocol.packets.handshake.IntentionPacket
 import io.ktor.utils.io.*
 import kotlinx.io.buffered
@@ -34,7 +35,7 @@ class EncodingTest {
 
     @Test
     fun `test encoding and decoding of intention packet with packet registration`() {
-        val packet = IntentionPacket(769, "localhost", 25565, IntentionPacket.NextState.Status)
+        val packet = IntentionPacket(769, "localhost", 25565.toUShort(), IntentionPacket.NextState.Status)
 
         val data = ProtocolData()
 
@@ -42,13 +43,10 @@ class EncodingTest {
         val sink = channel.asSink().buffered()
         val source = channel.asSource().buffered()
 
-        val encoder = MinecraftEncoder(data, sink)
-        val serial = data.getPacketClassById(0)!!
-        serial.serialize(encoder, packet)
+        data.format.send(packet, sink)
         sink.close()
 
-        val decoder = MinecraftDecoder(data, source)
-        val decoded = serial.deserialize(decoder)
+        val decoded = data.format.receive(source, Direction.Serverbound)
         source.close()
 
         assertEquals(packet, decoded)

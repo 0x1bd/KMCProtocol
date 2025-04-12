@@ -1,10 +1,7 @@
 package de.kvxd.kmcprotocol.core
 
-import de.kvxd.kmcprotocol.core.encoding.MinecraftEncoder
-import kotlinx.serialization.InternalSerializationApi
-import kotlinx.serialization.KSerializer
+import de.kvxd.kmcprotocol.core.format.impl.Uncompressed
 import kotlinx.serialization.modules.EmptySerializersModule
-import kotlinx.serialization.serializer
 
 class ProtocolData {
 
@@ -12,17 +9,8 @@ class ProtocolData {
 
     var state = ProtocolState.Handshake
 
-    @OptIn(InternalSerializationApi::class)
-    fun getPacketClassById(id: Int): KSerializer<MinecraftPacket>? {
-        state.packets.forEach { packetClass ->
-            val metadata = packetClass.annotations.filterIsInstance<PacketMetadata>().firstOrNull()
+    var registry = PacketRegistry().also(PacketRegistry::initializePacketRegistry)
 
-            if (metadata?.id != id) return null
-
-            return packetClass.serializer() as KSerializer<MinecraftPacket>
-        }
-
-        return null
-    }
+    var format = Uncompressed(this)
 
 }

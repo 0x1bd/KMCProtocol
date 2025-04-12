@@ -3,6 +3,7 @@ package de.kvxd.kmcprotocol.packets.handshake
 import de.kvxd.kmcprotocol.core.MinecraftPacket
 import de.kvxd.kmcprotocol.core.PacketMetadata
 import de.kvxd.kmcprotocol.core.variant.EValue
+import de.kvxd.kmcprotocol.core.variant.EVariant
 import de.kvxd.kmcprotocol.core.variant.NV
 import de.kvxd.kmcprotocol.core.variant.NumVariant
 import de.kvxd.kmcprotocol.network.Direction
@@ -17,19 +18,19 @@ data class IntentionPacket(
     @NV(NumVariant.VarInt)
     val protocolVersion: Int,
     val serverAddress: String,
-    @NV(NumVariant.Int)
-    val serverPort: Int,
+    val serverPort: UShort,
     val nextState: NextState
 ) : MinecraftPacket {
 
+    @EVariant(NumVariant.VarInt)
     enum class NextState {
-        @EValue(1)
+        @EValue(0)
         Status,
 
-        @EValue(2)
+        @EValue(1)
         Login,
 
-        @EValue(3)
+        @EValue(2)
         Transfer
     }
 

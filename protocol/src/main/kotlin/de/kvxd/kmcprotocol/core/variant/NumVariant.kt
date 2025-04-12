@@ -86,7 +86,7 @@ fun Source.readVarInt(): Int {
         offset += 7
     } while ((byte and 0x80.toByte()) != 0.toByte())
 
-    return value.also { println("Read: $value") }
+    return value
 }
 
 fun Sink.writeVarLong(value: Long) {

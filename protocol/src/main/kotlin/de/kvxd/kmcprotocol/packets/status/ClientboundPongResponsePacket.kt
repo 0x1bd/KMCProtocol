@@ -1,4 +1,4 @@
 package de.kvxd.kmcprotocol.packets.status
 
-class ServerboundStatusRequestPacket {
+class ClientboundPongResponsePacket {
 }

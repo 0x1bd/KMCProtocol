@@ -1,7 +1,5 @@
 package de.kvxd.kmcprotocol.core
 
-import de.kvxd.kmcprotocol.packets.handshake.IntentionPacket
-import de.kvxd.kmcprotocol.packets.status.ServerboundStatusRequestPacket
 import kotlin.reflect.KClass
 
 enum class ProtocolState(
@@ -10,12 +8,15 @@ enum class ProtocolState(
 
     Handshake(
         listOf(
-            IntentionPacket::class
+            //IntentionPacket::class
         )
     ),
     Status(
         listOf(
-            ServerboundStatusRequestPacket::class
+            //ServerboundStatusRequestPacket::class,
+            //ClientboundStatusResponsePacket::class,
+            //ServerboundPingRequestPacket::class,
+            //ClientboundPongResponsePacket::class
         )
     ),
     Login(listOf())

@@ -1,68 +1,38 @@
 package de.kvxd.kmcprotocol.core
 
 import de.kvxd.kmcprotocol.network.Direction
-import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
-import kotlin.reflect.full.findAnnotation
 
 class PacketRegistry {
 
-    private val statePacketMap = mutableMapOf<ProtocolState, MutableList<RegisteredPacket>>()
+    private val registry = mutableMapOf<KClass<out MinecraftPacket>, PacketInfo>()
 
-    data class RegisteredPacket(
-        val id: Int,
-        val direction: Direction,
-        val packetClass: KClass<out MinecraftPacket>,
+    data class PacketInfo(
+        val metadata: PacketMetadata,
+        val state: ProtocolState,
         val serializer: KSerializer<out MinecraftPacket>
     )
 
-    @OptIn(InternalSerializationApi::class)
-    fun registerStatePackets(state: ProtocolState) {
-        state.packets.forEach { packetClass ->
-            val metadata = packetClass.findAnnotation<PacketMetadata>()
-                ?: throw IllegalArgumentException("Packet class ${packetClass.simpleName} must have a PacketMetadata annotation")
+    fun register(packetClass: KClass<out MinecraftPacket>, state: ProtocolState) {
+        val metadata = packetClass.java.getAnnotation(PacketMetadata::class.java)
+            ?: throw IllegalArgumentException("Packet class ${packetClass.simpleName} must have @PacketMetadata annotation")
 
-            val serializer = packetClass.serializer()
-            val registeredPacket = RegisteredPacket(
-                id = metadata.id,
-                direction = metadata.direction,
-                packetClass = packetClass,
-                serializer = serializer
-            )
-
-            statePacketMap.computeIfAbsent(state) { mutableListOf() }.add(registeredPacket)
-        }
+        registry[packetClass] = PacketInfo(metadata, state, serializer())
     }
 
-    fun getPacketSerializerById(state: ProtocolState, id: Int, direction: Direction): KSerializer<MinecraftPacket>? {
-        return statePacketMap[state]?.firstOrNull { it.id == id && it.direction == direction }?.serializer as KSerializer<MinecraftPacket>?
+    fun getPacketInfo(packetClass: KClass<out MinecraftPacket>): PacketInfo {
+        println("registry (${registry.size})")
+        println(registry.toList().joinToString { "${it.first} : ${it.second}" })
+        return registry[packetClass] ?: throw IllegalArgumentException("Packet class not registered")
     }
 
-    fun getPacketSerializerByClass(
-        state: ProtocolState,
-        packetClass: KClass<out MinecraftPacket>
-    ): KSerializer<MinecraftPacket>? {
-        return statePacketMap[state]?.firstOrNull { it.packetClass == packetClass }?.serializer as KSerializer<MinecraftPacket>?
+    fun getPacketClass(id: Int, direction: Direction): KClass<out MinecraftPacket> {
+        return registry.entries.firstOrNull {
+            it.value.metadata.id == id &&
+                    it.value.metadata.direction == direction
+        }?.key ?: throw IllegalArgumentException("No packet registered for ID $id and direction $direction")
     }
 
-    fun getIdFromPacketClass(state: ProtocolState, packetClass: KClass<out MinecraftPacket>): Int? {
-        return statePacketMap[state]?.firstOrNull { it.packetClass == packetClass }?.id
-    }
-
-    fun getPacketMetadata(state: ProtocolState, id: Int, direction: Direction): RegisteredPacket? {
-        return statePacketMap[state]?.firstOrNull { it.id == id && it.direction == direction }
-    }
-
-    fun getPacketMetadata(state: ProtocolState, packet: MinecraftPacket): RegisteredPacket? {
-        val packetClass = packet::class
-        return statePacketMap[state]?.firstOrNull { it.packetClass == packetClass }
-    }
-
-    fun initializePacketRegistry() {
-        ProtocolState.entries.forEach { state ->
-            registerStatePackets(state)
-        }
-    }
 }

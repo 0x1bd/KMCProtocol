@@ -1,13 +1,20 @@
 package de.kvxd.kmcprotocol
 
 import de.kvxd.kmcprotocol.core.MinecraftPacket
-import de.kvxd.kmcprotocol.core.variant.EValue
-import de.kvxd.kmcprotocol.core.variant.EVariant
-import de.kvxd.kmcprotocol.core.variant.NumVariant
-import de.kvxd.kmcprotocol.core.variant.UseJson
+import de.kvxd.kmcprotocol.core.PacketMetadata
+import de.kvxd.kmcprotocol.core.encoding.serializers.ComponentSerializer
+import de.kvxd.kmcprotocol.core.format.EnumValue
+import de.kvxd.kmcprotocol.core.format.number.IntFormat
+import de.kvxd.kmcprotocol.core.format.number.IntFormatType
+import de.kvxd.kmcprotocol.network.Direction
 import kotlinx.serialization.Serializable
+import net.kyori.adventure.text.Component
 
 @Serializable
+@PacketMetadata(
+    id = 0x00,
+    direction = Direction.Serverbound
+)
 data class TestPacket(
     val byte: Byte,
     val boolean: Boolean,
@@ -22,43 +29,52 @@ data class TestPacket(
     val string: String,
     val enum: TestEnum,
     val enum1: TestEnum1,
-    @UseJson
     val json: JsonStruct
 ) : MinecraftPacket {
 
     enum class TestEnum {
 
-        @EValue(-12)
+        @EnumValue(-12)
         One,
+
+        @EnumValue(-13)
         Two,
+
+        @EnumValue(-16)
         Three,
+
+        @EnumValue(54)
         Four
 
     }
 
-    @EVariant(NumVariant.VarInt)
+    @IntFormat(IntFormatType.VARIABLE)
     enum class TestEnum1 {
 
-        @EValue(64)
+        @EnumValue(64)
         One,
 
-        @EValue(6)
+        @EnumValue(6)
         Two,
 
-        @EValue(9)
+        @EnumValue(9)
         Three,
 
-        @EValue(54)
+        @EnumValue(54)
         Four
 
     }
 
-    @Serializable
+    @Serializable(/*with = JsonStruct.Serializer::class*/)
     data class JsonStruct(
         val a: String,
         val b: Int,
-        val c: String
-    )
+        val c: String,
+        @Serializable(with = ComponentSerializer::class)
+        val d: Component
+    ) {
+        //object Serializer : KSerializer<JsonStruct> by jsonString()
+    }
 
 }
 
@@ -76,5 +92,5 @@ fun generateTestPacket() = TestPacket(
     "Hello, World!",
     TestPacket.TestEnum.One,
     TestPacket.TestEnum1.Four,
-    TestPacket.JsonStruct("Hello", 0, "World")
+    TestPacket.JsonStruct("Hello", 0, "World", Component.text("Hello, World Component!"))
 )

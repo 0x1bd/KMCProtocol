@@ -17,6 +17,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertIs
+import kotlin.time.Duration.Companion.milliseconds
 
 class TestEmulated {
 
@@ -64,7 +65,7 @@ class TestEmulated {
 
         client.send(ServerboundPingStartPacket)
 
-        assertIs<ServerboundPingStartPacket>(withTimeout(5_000) { receivedStatusRequest.await() })
+        assertIs<ServerboundPingStartPacket>(withTimeout(5_000.milliseconds) { receivedStatusRequest.await() })
 
         client.disconnect()
         server.close()

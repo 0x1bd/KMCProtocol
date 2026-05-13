@@ -62,7 +62,7 @@ class GeneratedPacketSerializationTest {
 
     @Suppress("UNCHECKED_CAST")
     private fun samplePacket(serializer: KSerializer<out MinecraftPacket>): MinecraftPacket =
-        SamplePacketDecoder.decode(serializer) as MinecraftPacket
+        SamplePacketDecoder.decode(serializer)
 
 }
 

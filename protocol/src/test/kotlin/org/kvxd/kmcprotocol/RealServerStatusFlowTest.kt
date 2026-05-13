@@ -11,8 +11,10 @@ import org.kvxd.kmcprotocol.packets.generated.status.serverbound.ServerboundPing
 import org.kvxd.kmcprotocol.packets.generated.status.serverbound.ServerboundPingStartPacket
 import io.ktor.network.sockets.InetSocketAddress
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.net.Socket
@@ -44,8 +46,8 @@ class RealServerStatusFlowTest {
                     }
                 }
 
-                override fun onError(error: Throwable) {
-                    clientError.complete(error)
+                override fun onError(cause: Throwable) {
+                    clientError.complete(cause)
                 }
             })
 
@@ -93,7 +95,9 @@ class RealServerStatusFlowTest {
         }
 
         val port = freePort()
-        val serverDir = Files.createTempDirectory("kmc-real-server").toFile()
+        val serverDir = withContext(Dispatchers.IO) {
+            Files.createTempDirectory("kmc-real-server")
+        }.toFile()
         serverDir.resolve("eula.txt").writeText("eula=true")
         serverDir.resolve("server.properties").writeText(
             """
@@ -108,17 +112,19 @@ class RealServerStatusFlowTest {
         )
 
         val ready = CountDownLatch(1)
-        val process = ProcessBuilder(
-            "java",
-            "-Xms512M",
-            "-Xmx1024M",
-            "-jar",
-            jar.absolutePath,
-            "nogui",
-        )
-            .directory(serverDir)
-            .redirectErrorStream(true)
-            .start()
+        val process = withContext(Dispatchers.IO) {
+            ProcessBuilder(
+                "java",
+                "-Xms512M",
+                "-Xmx1024M",
+                "-jar",
+                jar.absolutePath,
+                "nogui",
+            )
+                .directory(serverDir)
+                .redirectErrorStream(true)
+                .start()
+        }
         val outputReader = Thread {
             process.inputStream.bufferedReader().useLines { lines ->
                 lines.forEach {
@@ -141,10 +147,14 @@ class RealServerStatusFlowTest {
                 process.outputStream.write("stop\n".toByteArray())
                 process.outputStream.flush()
             }
-            if (!process.waitFor(15, TimeUnit.SECONDS)) {
+            if (!withContext(Dispatchers.IO) {
+                    process.waitFor(15, TimeUnit.SECONDS)
+                }) {
                 process.destroyForcibly()
             }
-            outputReader.join(1_000)
+            withContext(Dispatchers.IO) {
+                outputReader.join(1_000)
+            }
         }
     }
 

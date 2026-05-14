@@ -121,6 +121,16 @@ class MinecraftDecoder(data: ProtocolData, private val channel: ByteReadChannel)
     }
 
     override fun decodeStringElement(descriptor: SerialDescriptor, index: Int): String {
+        val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index)
+        if (protocolType != null) {
+            val value = runBlocking {
+                val context = contextStack.lastOrNull() ?: mutableMapOf()
+                ProtocolDynamicCodec.decode(ProtocolDynamicCodec.parse(protocolType.json), channel, context).value?.toString() ?: ""
+            }
+            recordElement(descriptor, index, value)
+            return value
+        }
+
         val value = decodeString()
         recordElement(descriptor, index, value)
         return value
@@ -152,6 +162,16 @@ class MinecraftDecoder(data: ProtocolData, private val channel: ByteReadChannel)
         deserializer: DeserializationStrategy<T?>,
         previousValue: T?
     ): T? {
+        val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index)
+        if (protocolType != null) {
+            val value = runBlocking {
+                val context = contextStack.lastOrNull() ?: mutableMapOf()
+                ProtocolDynamicCodec.decodeAny(ProtocolDynamicCodec.parse(protocolType.json), deserializer, channel, context)
+            }
+            recordElement(descriptor, index, value)
+            return value
+        }
+
         error("Cannot decode null")
     }
 
@@ -163,12 +183,11 @@ class MinecraftDecoder(data: ProtocolData, private val channel: ByteReadChannel)
     ): T {
         val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index)
         if (protocolType != null) {
-            @Suppress("UNCHECKED_CAST")
             val value = runBlocking {
                 val context = contextStack.lastOrNull() ?: mutableMapOf()
-                ProtocolDynamicCodec.decode(ProtocolDynamicCodec.parse(protocolType.json), channel, context)
-            } as T
-            recordElement(descriptor, index, (value as ProtocolValue).value)
+                ProtocolDynamicCodec.decodeAny(ProtocolDynamicCodec.parse(protocolType.json), deserializer, channel, context)
+            }
+            recordElement(descriptor, index, value)
             return value
         }
 

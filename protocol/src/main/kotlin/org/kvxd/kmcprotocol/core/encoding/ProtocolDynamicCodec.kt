@@ -2,10 +2,10 @@ package org.kvxd.kmcprotocol.core.encoding
 
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
-import io.ktor.utils.io.readAvailable
 import io.ktor.utils.io.readByte
 import io.ktor.utils.io.readDouble
 import io.ktor.utils.io.readFloat
+import io.ktor.utils.io.readFully
 import io.ktor.utils.io.readInt
 import io.ktor.utils.io.readLong
 import io.ktor.utils.io.readRemaining
@@ -18,6 +18,9 @@ import io.ktor.utils.io.writeFully
 import io.ktor.utils.io.writeLong
 import io.ktor.utils.io.writeShort
 import kotlinx.io.readByteArray
+import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -30,11 +33,77 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.kvxd.kmcprotocol.generated.GeneratedPacketRegistry
+import net.benwoodworth.knbt.NbtByte
+import net.benwoodworth.knbt.NbtByteArray
+import net.benwoodworth.knbt.NbtCompound
+import net.benwoodworth.knbt.NbtDouble
+import net.benwoodworth.knbt.NbtFloat
+import net.benwoodworth.knbt.NbtInt
+import net.benwoodworth.knbt.NbtIntArray
+import net.benwoodworth.knbt.NbtList
+import net.benwoodworth.knbt.NbtLong
+import net.benwoodworth.knbt.NbtLongArray
+import net.benwoodworth.knbt.NbtShort
+import net.benwoodworth.knbt.NbtString
+import net.benwoodworth.knbt.NbtTag
 import java.util.UUID
+import kotlin.reflect.full.memberProperties
 
 object ProtocolDynamicCodec {
 
     fun parse(type: String): JsonElement = Json.parseToJsonElement(type)
+
+    suspend fun encodeAny(type: JsonElement, value: Any?, channel: ByteWriteChannel, context: MutableMap<String, Any?>) {
+        encode(type, value.toProtocolValue(), channel, context)
+    }
+
+    suspend fun <T> decodeAny(
+        type: JsonElement,
+        deserializer: DeserializationStrategy<T>,
+        channel: ByteReadChannel,
+        context: MutableMap<String, Any?>,
+    ): T {
+        val value = decode(type, channel, context)
+        if (deserializer.descriptor.serialName.endsWith("ProtocolValue")) {
+            @Suppress("UNCHECKED_CAST")
+            return value as T
+        }
+        if (
+            value.value == null &&
+            (deserializer.descriptor.isNullable || deserializer.descriptor.serialName.startsWith("net.benwoodworth.knbt."))
+        ) {
+            @Suppress("UNCHECKED_CAST")
+            return null as T
+        }
+        if (value.value is ByteArray && deserializer.descriptor.serialName == "kotlin.ByteArray") {
+            @Suppress("UNCHECKED_CAST")
+            return value.value as T
+        }
+        value.value.directNbtValue<T>(deserializer)?.let { return it }
+        return deserializer.deserialize(ProtocolValueBackedDecoder(value.value))
+    }
+
+    fun <T> sampleAny(
+        type: JsonElement,
+        deserializer: DeserializationStrategy<T>,
+        context: MutableMap<String, Any?> = mutableMapOf(),
+    ): T {
+        val value = sample(type, context)
+        if (deserializer.descriptor.serialName.endsWith("ProtocolValue")) {
+            @Suppress("UNCHECKED_CAST")
+            return value as T
+        }
+        if (
+            value.value == null &&
+            (deserializer.descriptor.isNullable || deserializer.descriptor.serialName.startsWith("net.benwoodworth.knbt."))
+        ) {
+            @Suppress("UNCHECKED_CAST")
+            return null as T
+        }
+        value.value.directNbtValue<T>(deserializer)?.let { return it }
+        return deserializer.deserialize(ProtocolValueBackedDecoder(value.value))
+    }
 
     suspend fun encode(type: JsonElement, value: ProtocolValue, channel: ByteWriteChannel, context: MutableMap<String, Any?>) {
         resolveAlias(type)?.let {
@@ -136,7 +205,7 @@ object ProtocolDynamicCodec {
             "buffer" -> {
                 val count = readArrayCount(options, context, channel)
                 val bytes = ByteArray(count)
-                channel.readAvailable(bytes, 0, count)
+                channel.readFully(bytes, 0, count)
                 ProtocolValue.bytes(bytes)
             }
 
@@ -174,7 +243,7 @@ object ProtocolDynamicCodec {
             "array" -> ProtocolValue.list(emptyList())
             "topBitSetTerminatedArray" -> ProtocolValue.list(listOf(sample(options["type"] ?: JsonPrimitive("void"), context)))
             "buffer" -> ProtocolValue.bytes(ByteArray(sampleCount(options)))
-            "option" -> ProtocolValue(null)
+            "option" -> sample(type.getOrNull(1) ?: JsonPrimitive("void"), context)
             "container" -> ProtocolValue.obj(sampleContainer(type.fields(), context))
             "switch" -> sampleSwitch(options, context)
             "mapper" -> ProtocolValue(
@@ -187,7 +256,11 @@ object ProtocolDynamicCodec {
             })
             "pstring" -> ProtocolValue("sample")
             "registryEntryHolder" -> ProtocolValue.obj(mapOf(options["baseName"]!!.jsonPrimitive.content to ProtocolValue(1)))
-            "registryEntryHolderSet" -> ProtocolValue.obj(mapOf("ids" to ProtocolValue(1)))
+            "registryEntryHolderSet" -> {
+                val otherwise = options["otherwise"]?.jsonObject
+                val name = otherwise?.get("name")?.jsonPrimitive?.content ?: "ids"
+                ProtocolValue.obj(mapOf(name to ProtocolValue.list(listOf(sample(otherwise?.get("type") ?: JsonPrimitive("varint"), context)))))
+            }
             "entityMetadataLoop" -> ProtocolValue.bytes(byteArrayOf(0xff.toByte()))
             "void" -> ProtocolValue(null)
             else -> ProtocolValue(null)
@@ -286,7 +359,7 @@ object ProtocolDynamicCodec {
 
     private fun selectedSwitchType(options: JsonObject, context: Map<String, Any?>): JsonElement? {
         val compareTo = options["compareTo"]?.jsonPrimitive?.content ?: return options["default"]
-        val compared = context[compareTo]
+        val compared = context.pathValue(compareTo)
         val fields = options["fields"]?.jsonObject.orEmpty()
         return fields[switchKey(compared)] ?: options["default"]
     }
@@ -398,11 +471,14 @@ object ProtocolDynamicCodec {
         context: MutableMap<String, Any?>,
     ) {
         val baseName = options["baseName"]!!.jsonPrimitive.content
-        val id = values[baseName].asNumber().toInt()
-        channel.writeVarInt(id)
-        if (id == 0) {
-            val otherwise = options["otherwise"]!!.jsonObject
-            encode(otherwise["type"] ?: JsonPrimitive("void"), values[otherwise["name"]!!.jsonPrimitive.content] ?: ProtocolValue(), channel, context)
+        val otherwise = options["otherwise"]!!.jsonObject
+        val otherwiseName = otherwise["name"]!!.jsonPrimitive.content
+        val directValue = values[otherwiseName]
+        if (directValue?.value != null) {
+            channel.writeVarInt(0)
+            encode(otherwise["type"] ?: JsonPrimitive("void"), directValue, channel, context)
+        } else {
+            channel.writeVarInt(values[baseName].asNumber().toInt() + 1)
         }
     }
 
@@ -412,12 +488,14 @@ object ProtocolDynamicCodec {
         context: MutableMap<String, Any?>,
     ): Map<String, ProtocolValue> {
         val baseName = options["baseName"]!!.jsonPrimitive.content
-        val id = channel.readVarInt()
-        val values = linkedMapOf(baseName to ProtocolValue(id))
-        if (id == 0) {
+        val rawId = channel.readVarInt()
+        val values = linkedMapOf<String, ProtocolValue>()
+        if (rawId == 0) {
             val otherwise = options["otherwise"]!!.jsonObject
             val name = otherwise["name"]!!.jsonPrimitive.content
             values[name] = decode(otherwise["type"] ?: JsonPrimitive("void"), channel, context)
+        } else {
+            values[baseName] = ProtocolValue(rawId - 1)
         }
         return values
     }
@@ -428,12 +506,20 @@ object ProtocolDynamicCodec {
         channel: ByteWriteChannel,
         context: MutableMap<String, Any?>,
     ) {
-        val id = values["ids"].asNumber().toInt()
-        channel.writeVarInt(id)
-        if (id == 0) {
-            val base = options["base"]!!.jsonObject
-            encode(base["type"] ?: JsonPrimitive("string"), values[base["name"]!!.jsonPrimitive.content] ?: ProtocolValue("sample"), channel, context)
+        val base = options["base"]!!.jsonObject
+        val baseName = base["name"]!!.jsonPrimitive.content
+        val baseValue = values[baseName]
+        if (baseValue?.value != null) {
+            channel.writeVarInt(0)
+            encode(base["type"] ?: JsonPrimitive("string"), baseValue, channel, context)
+            return
         }
+
+        val otherwise = options["otherwise"]!!.jsonObject
+        val otherwiseName = otherwise["name"]!!.jsonPrimitive.content
+        val ids = values[otherwiseName]?.asList().orEmpty()
+        channel.writeVarInt(ids.size + 1)
+        ids.forEach { encode(otherwise["type"] ?: JsonPrimitive("varint"), it, channel, context) }
     }
 
     private suspend fun decodeRegistryEntryHolderSet(
@@ -441,11 +527,17 @@ object ProtocolDynamicCodec {
         channel: ByteReadChannel,
         context: MutableMap<String, Any?>,
     ): Map<String, ProtocolValue> {
-        val id = channel.readVarInt()
-        val values = linkedMapOf("ids" to ProtocolValue(id))
-        if (id == 0) {
+        val tagOrCount = channel.readVarInt()
+        val values = linkedMapOf<String, ProtocolValue>()
+        if (tagOrCount == 0) {
             val base = options["base"]!!.jsonObject
             values[base["name"]!!.jsonPrimitive.content] = decode(base["type"] ?: JsonPrimitive("string"), channel, context)
+        } else {
+            val otherwise = options["otherwise"]!!.jsonObject
+            val type = otherwise["type"] ?: JsonPrimitive("varint")
+            values[otherwise["name"]!!.jsonPrimitive.content] = ProtocolValue.list(
+                List(tagOrCount - 1) { decode(type, channel, context) }
+            )
         }
         return values
     }
@@ -468,7 +560,12 @@ object ProtocolDynamicCodec {
             "string" -> writeString(channel, value as? String ?: "")
             "UUID" -> writeUuid(channel, value)
             "restBuffer" -> channel.writeFully((value as? ByteArray) ?: byteArrayOf())
-            "anonymousNbt", "anonOptionalNbt", "entityMetadataLoop" -> channel.writeFully((value as? ByteArray) ?: byteArrayOf(0))
+            "anonymousNbt" -> channel.writeNbtTag((value as? NbtTag) ?: emptyNbt)
+            "anonOptionalNbt" -> {
+                val tag = value as? NbtTag
+                if (tag == null) channel.writeByte(NBT_END.toByte()) else channel.writeNbtTag(tag)
+            }
+            "entityMetadataLoop" -> channel.writeFully((value as? ByteArray) ?: byteArrayOf(0xff.toByte()))
             else -> error("Unsupported scalar protocol type: $name")
         }
     }
@@ -491,7 +588,9 @@ object ProtocolDynamicCodec {
             "string" -> readString(channel)
             "UUID" -> UUID(channel.readLong(), channel.readLong()).toString()
             "restBuffer" -> channel.readRemaining().readByteArray()
-            "anonymousNbt", "anonOptionalNbt", "entityMetadataLoop" -> byteArrayOf(channel.readByte())
+            "anonymousNbt" -> channel.readNbtTag() ?: emptyNbt
+            "anonOptionalNbt" -> channel.readNbtTag()
+            "entityMetadataLoop" -> byteArrayOf(channel.readByte())
             else -> error("Unsupported scalar protocol type: $name")
         }
 
@@ -502,12 +601,14 @@ object ProtocolDynamicCodec {
                 "bool" -> true
                 "i8", "u8", "i16", "u16", "i32", "u32", "varint", "optvarint" -> 0
                 "i64", "varlong" -> 0L
-                "f32" -> 1f
-                "f64" -> 1.0
+                "f32" -> 0f
+                "f64" -> 0.0
                 "string" -> "sample"
                 "UUID" -> "00000000-0000-0000-0000-000000000001"
                 "restBuffer" -> byteArrayOf()
-                "anonymousNbt", "anonOptionalNbt", "entityMetadataLoop" -> byteArrayOf(0)
+                "anonymousNbt" -> emptyNbt
+                "anonOptionalNbt" -> null
+                "entityMetadataLoop" -> byteArrayOf(0xff.toByte())
                 else -> null
             }
         )
@@ -573,7 +674,7 @@ object ProtocolDynamicCodec {
 
     private suspend fun readString(channel: ByteReadChannel): String {
         val bytes = ByteArray(channel.readVarInt())
-        channel.readAvailable(bytes, 0, bytes.size)
+        channel.readFully(bytes, 0, bytes.size)
         return bytes.toString(Charsets.UTF_8)
     }
 
@@ -612,6 +713,23 @@ object ProtocolDynamicCodec {
             else -> value?.toString() ?: ""
         }
 
+    private fun Map<String, Any?>.pathValue(path: String): Any? {
+        val parts = path.removePrefix("../").split('/').filter { it.isNotEmpty() && it != ".." }
+        if (parts.isEmpty()) return null
+
+        var current: Any? = this[parts.first()]
+        parts.drop(1).forEach { part ->
+            current = when (val value = current.unwrapProtocolValue()) {
+                is Map<*, *> -> value[part]
+                else -> return null
+            }
+        }
+        return current.unwrapProtocolValue()
+    }
+
+    private fun Any?.unwrapProtocolValue(): Any? =
+        if (this is ProtocolValue) value else this
+
     private fun JsonArray.kind(): String = this[0].jsonPrimitive.content
     private fun JsonArray.options(): JsonObject = getOrNull(1) as? JsonObject ?: JsonObject(emptyMap())
     private fun JsonArray.fields(): List<JsonObject> = getOrNull(1)?.jsonArray?.map { it.jsonObject }.orEmpty()
@@ -631,6 +749,24 @@ object ProtocolDynamicCodec {
 
     private fun ProtocolValue.asBytes(): ByteArray = value as? ByteArray ?: byteArrayOf()
     private fun ProtocolValue?.asNumber(): Number = this?.value as? Number ?: 0
+
+    private fun Any?.toProtocolValue(): ProtocolValue =
+        when (this) {
+            null -> ProtocolValue(null)
+            is ProtocolValue -> this
+            is NbtTag -> ProtocolValue(this)
+            is ByteArray -> ProtocolValue.bytes(this)
+            is Iterable<*> -> ProtocolValue.list(map { it.toProtocolValue() })
+            is Map<*, *> -> ProtocolValue.obj(entries.associate { it.key.toString() to it.value.toProtocolValue() })
+            is UUID -> ProtocolValue(toString())
+            is Enum<*> -> ProtocolValue(this::class.java.getField(name).getAnnotation(SerialName::class.java)?.value ?: name)
+            is String, is Number, is Boolean -> ProtocolValue(this)
+            else -> ProtocolValue.obj(
+                this::class.memberProperties.associate { property ->
+                    property.name to property.getter.call(this).toProtocolValue()
+                }
+            )
+        }
 
     private fun resolveAlias(type: JsonElement): JsonElement? {
         val name = (type as? JsonPrimitive)?.contentOrNull ?: return null
@@ -664,9 +800,10 @@ object ProtocolDynamicCodec {
     )
 
     private val protocolTypes: Map<String, JsonElement> by lazy {
-        val resource = Thread.currentThread().contextClassLoader.getResourceAsStream("pc/1.21.4/protocol.json")
-            ?: ProtocolDynamicCodec::class.java.classLoader.getResourceAsStream("pc/1.21.4/protocol.json")
-            ?: error("Missing bundled minecraft-data protocol.json resource")
+        val resourcePath = GeneratedPacketRegistry.protocolResourcePath
+        val resource = Thread.currentThread().contextClassLoader.getResourceAsStream(resourcePath)
+            ?: ProtocolDynamicCodec::class.java.classLoader.getResourceAsStream(resourcePath)
+            ?: error("Missing bundled minecraft-data protocol.json resource: $resourcePath")
 
         resource.use {
             val protocol = Json.parseToJsonElement(it.bufferedReader().readText()).jsonObject
@@ -680,5 +817,151 @@ object ProtocolDynamicCodec {
                 }
             }
         }
+    }
+
+    private val emptyNbt = NbtCompound(emptyMap())
+
+    private const val NBT_END = 0
+    private const val NBT_BYTE = 1
+    private const val NBT_SHORT = 2
+    private const val NBT_INT = 3
+    private const val NBT_LONG = 4
+    private const val NBT_FLOAT = 5
+    private const val NBT_DOUBLE = 6
+    private const val NBT_BYTE_ARRAY = 7
+    private const val NBT_STRING = 8
+    private const val NBT_LIST = 9
+    private const val NBT_COMPOUND = 10
+    private const val NBT_INT_ARRAY = 11
+    private const val NBT_LONG_ARRAY = 12
+
+    private suspend fun ByteWriteChannel.writeNbtTag(tag: NbtTag) {
+        writeByte(tag.nbtTypeId().toByte())
+        writeNbtPayload(tag)
+    }
+
+    private suspend fun ByteWriteChannel.writeNbtPayload(tag: NbtTag) {
+        when (tag) {
+            is NbtByte -> writeByte(tag.value)
+            is NbtShort -> writeShort(tag.value)
+            is NbtInt -> writeInt(tag.value)
+            is NbtLong -> writeLong(tag.value)
+            is NbtFloat -> writeFloat(tag.value)
+            is NbtDouble -> writeDouble(tag.value)
+            is NbtByteArray -> {
+                writeInt(tag.size)
+                tag.forEach { writeByte(it) }
+            }
+            is NbtString -> writeNbtString(tag.value)
+            is NbtList<*> -> {
+                val elementType = tag.firstOrNull()?.nbtTypeId() ?: NBT_END
+                writeByte(elementType.toByte())
+                writeInt(tag.size)
+                tag.forEach { writeNbtPayload(it) }
+            }
+            is NbtCompound -> {
+                tag.forEach { (name, value) ->
+                    writeByte(value.nbtTypeId().toByte())
+                    writeNbtString(name)
+                    writeNbtPayload(value)
+                }
+                writeByte(NBT_END.toByte())
+            }
+            is NbtIntArray -> {
+                writeInt(tag.size)
+                tag.forEach { writeInt(it) }
+            }
+            is NbtLongArray -> {
+                writeInt(tag.size)
+                tag.forEach { writeLong(it) }
+            }
+        }
+    }
+
+    private suspend fun ByteReadChannel.readNbtTag(): NbtTag? {
+        val type = readByte().toInt() and 0xff
+        return if (type == NBT_END) null else readNbtPayload(type)
+    }
+
+    private suspend fun ByteReadChannel.readNbtPayload(type: Int): NbtTag =
+        when (type) {
+            NBT_BYTE -> NbtByte(readByte())
+            NBT_SHORT -> NbtShort(readShort())
+            NBT_INT -> NbtInt(readInt())
+            NBT_LONG -> NbtLong(readLong())
+            NBT_FLOAT -> NbtFloat(readFloat())
+            NBT_DOUBLE -> NbtDouble(readDouble())
+            NBT_BYTE_ARRAY -> NbtByteArray(ByteArray(readInt()) { readByte() })
+            NBT_STRING -> NbtString(readNbtString())
+            NBT_LIST -> readNbtList()
+            NBT_COMPOUND -> readNbtCompound()
+            NBT_INT_ARRAY -> NbtIntArray(IntArray(readInt()) { readInt() })
+            NBT_LONG_ARRAY -> NbtLongArray(LongArray(readInt()) { readLong() })
+            else -> error("Unsupported NBT tag type id: $type")
+        }
+
+    private suspend fun ByteReadChannel.readNbtList(): NbtList<*> {
+        val elementType = readByte().toInt() and 0xff
+        val count = readInt()
+        val values = List(count) { readNbtPayload(elementType) }
+        return values.toNbtList(elementType)
+    }
+
+    private suspend fun ByteReadChannel.readNbtCompound(): NbtCompound {
+        val values = linkedMapOf<String, NbtTag>()
+        while (true) {
+            val type = readByte().toInt() and 0xff
+            if (type == NBT_END) return NbtCompound(values)
+            values[readNbtString()] = readNbtPayload(type)
+        }
+    }
+
+    private fun List<NbtTag>.toNbtList(elementType: Int): NbtList<*> =
+        when (elementType) {
+            NBT_BYTE, NBT_END -> NbtList(filterIsInstance<NbtByte>())
+            NBT_SHORT -> NbtList(filterIsInstance<NbtShort>())
+            NBT_INT -> NbtList(filterIsInstance<NbtInt>())
+            NBT_LONG -> NbtList(filterIsInstance<NbtLong>())
+            NBT_FLOAT -> NbtList(filterIsInstance<NbtFloat>())
+            NBT_DOUBLE -> NbtList(filterIsInstance<NbtDouble>())
+            NBT_BYTE_ARRAY -> NbtList(filterIsInstance<NbtByteArray>())
+            NBT_STRING -> NbtList(filterIsInstance<NbtString>())
+            NBT_LIST -> NbtList(filterIsInstance<NbtList<*>>())
+            NBT_COMPOUND -> NbtList(filterIsInstance<NbtCompound>())
+            NBT_INT_ARRAY -> NbtList(filterIsInstance<NbtIntArray>())
+            NBT_LONG_ARRAY -> NbtList(filterIsInstance<NbtLongArray>())
+            else -> error("Unsupported NBT list element type id: $elementType")
+        }
+
+    private fun NbtTag.nbtTypeId(): Int =
+        when (this) {
+            is NbtByte -> NBT_BYTE
+            is NbtShort -> NBT_SHORT
+            is NbtInt -> NBT_INT
+            is NbtLong -> NBT_LONG
+            is NbtFloat -> NBT_FLOAT
+            is NbtDouble -> NBT_DOUBLE
+            is NbtByteArray -> NBT_BYTE_ARRAY
+            is NbtString -> NBT_STRING
+            is NbtList<*> -> NBT_LIST
+            is NbtCompound -> NBT_COMPOUND
+            is NbtIntArray -> NBT_INT_ARRAY
+            is NbtLongArray -> NBT_LONG_ARRAY
+        }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> Any?.directNbtValue(deserializer: DeserializationStrategy<T>): T? =
+        if (this is NbtTag && deserializer.descriptor.serialName.startsWith("net.benwoodworth.knbt.")) this as T else null
+
+    private suspend fun ByteWriteChannel.writeNbtString(value: String) {
+        val bytes = value.toByteArray(Charsets.UTF_8)
+        writeShort(bytes.size.toShort())
+        writeFully(bytes)
+    }
+
+    private suspend fun ByteReadChannel.readNbtString(): String {
+        val bytes = ByteArray(readShort().toUShort().toInt())
+        readFully(bytes, 0, bytes.size)
+        return bytes.toString(Charsets.UTF_8)
     }
 }

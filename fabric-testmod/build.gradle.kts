@@ -32,7 +32,7 @@ loom {
     runs {
         named("server") {
             server()
-            runDir = "run"
+            runDir = providers.gradleProperty("kmcFabricServerRunDir").orElse("run").get()
             programArgs("--nogui", "--port", providers.gradleProperty("kmcFabricServerPort").orElse("25567").get())
         }
     }

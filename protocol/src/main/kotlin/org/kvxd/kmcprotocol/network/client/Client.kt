@@ -9,16 +9,42 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 
-class Client(
-    address: SocketAddress,
-    protocol: ProtocolData = ProtocolData()
+class Client private constructor(
+    protocol: ProtocolData,
+    socket: Socket,
+    private val selectorManager: SelectorManager,
 ) : Connection(
     protocol,
     Direction.Clientbound,
-    createSocket(address)
+    socket
+) {
+
+    constructor(
+        address: SocketAddress,
+        protocol: ProtocolData = ProtocolData()
+    ) : this(protocol, createSocket(address))
+
+    private constructor(
+        protocol: ProtocolData,
+        clientSocket: ClientSocket,
+    ) : this(protocol, clientSocket.socket, clientSocket.selectorManager)
+
+    override fun closeTransportResources() {
+        selectorManager.close()
+    }
+}
+
+private data class ClientSocket(
+    val socket: Socket,
+    val selectorManager: SelectorManager,
 )
 
-private fun createSocket(address: SocketAddress): Socket = runBlocking {
+private fun createSocket(address: SocketAddress): ClientSocket = runBlocking {
     val selectorManager = SelectorManager(Dispatchers.IO + SupervisorJob())
-    aSocket(selectorManager).tcp().connect(address)
+    try {
+        ClientSocket(aSocket(selectorManager).tcp().connect(address), selectorManager)
+    } catch (cause: Throwable) {
+        selectorManager.close()
+        throw cause
+    }
 }

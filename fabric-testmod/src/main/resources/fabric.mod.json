@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "id": "kmcprotocol_testmod",
+  "id": "kmcprotocol",
   "version": "${version}",
-  "name": "KMCProtocol Test Mod",
-  "description": "Server-side packet acknowledgement fixture for KMCProtocol integration tests.",
-  "environment": "server",
+  "name": "KMCProtocol Conformance Test Mod",
+  "description": "Minimal Fabric hooks for KMCProtocol protocol conformance tests.",
+  "environment": "*",
   "entrypoints": {
     "main": [
       "org.kvxd.kmcprotocol.fabric.KmcProtocolTestMod"

@@ -1,30 +1,34 @@
 package org.kvxd.kmcprotocol.network.server
 
 import org.kvxd.kmcprotocol.core.ProtocolData
+import org.kvxd.kmcprotocol.core.KmcProtocolException
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.selects.select
 import java.util.*
+import java.util.concurrent.atomic.AtomicBoolean
 
 class Server(
     private val bindAddress: SocketAddress = InetSocketAddress("0.0.0.0", 25565),
     private val sessionProtocolData: () -> ProtocolData = { ProtocolData() },
-) {
+) : AutoCloseable {
     private lateinit var socket: ServerSocket
+    private lateinit var selectorManager: SelectorManager
 
-    private val sessions = Collections.synchronizedSet(mutableSetOf<ServerSession>())
+    private val activeSessions = Collections.synchronizedSet(mutableSetOf<ServerSession>())
 
-    private val callbacks = mutableSetOf<ServerCallback>()
+    private val closed = AtomicBoolean(false)
 
-    fun addCallback(callback: ServerCallback) {
-        callbacks.add(callback)
-    }
+    private val acceptedSessions = Channel<ServerSession>(Channel.BUFFERED)
+    val sessions: ReceiveChannel<ServerSession> = acceptedSessions
 
-    fun removeCallback(callback: ServerCallback) {
-        callbacks.remove(callback)
-    }
+    private val serverErrors = Channel<Throwable>(Channel.BUFFERED)
+    val errors: ReceiveChannel<Throwable> = serverErrors
 
     private val boundDeferred = CompletableDeferred<Unit>()
 
@@ -36,39 +40,57 @@ class Server(
         get() = socket.localAddress
 
     suspend fun bind() {
-        socket = aSocket(ActorSelectorManager(Dispatchers.IO))
+        selectorManager = ActorSelectorManager(Dispatchers.IO)
+        socket = aSocket(selectorManager)
             .tcp()
             .bind(bindAddress)
 
         boundDeferred.complete(Unit)
-        callbacks.forEach { it.onBound() }
 
         while (!socket.isClosed) {
             try {
                 val sessionSocket = socket.accept()
 
                 val session = ServerSession(sessionSocket, sessionProtocolData())
-                sessions.add(session)
+                activeSessions.add(session)
 
-                callbacks.forEach { it.onSessionConnected(session) }
+                acceptedSessions.send(session)
             } catch (e: Exception) {
                 if (socket.isClosed) break
 
-                callbacks.forEach { it.onError(e) }
-                throw e
+                val error = KmcProtocolException(
+                    message = """
+                    Server accept loop failed.
+                    Bind address: $bindAddress
+                    Details: ${e.message ?: e::class.simpleName}
+                    """.trimIndent(),
+                    cause = e,
+                )
+                serverErrors.trySend(error)
+                throw error
             }
         }
     }
 
-    fun close() = runBlocking {
-        callbacks.forEach { it.onClose() }
+    suspend fun accept(): ServerSession =
+        select {
+            acceptedSessions.onReceive { it }
+            serverErrors.onReceive { throw it }
+        }
 
-        sessions.forEach { it.close() }
-        sessions.clear()
+    override fun close() = runBlocking {
+        if (!closed.compareAndSet(false, true)) return@runBlocking
+
+        activeSessions.forEach { it.close() }
+        activeSessions.clear()
 
         if (::socket.isInitialized) {
             socket.close()
         }
+        if (::selectorManager.isInitialized) {
+            selectorManager.close()
+        }
+        acceptedSessions.close()
+        serverErrors.close()
     }
-
 }

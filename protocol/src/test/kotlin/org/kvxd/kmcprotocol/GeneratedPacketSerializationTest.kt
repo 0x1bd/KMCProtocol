@@ -1,6 +1,9 @@
 package org.kvxd.kmcprotocol
 
 import io.ktor.utils.io.ByteChannel
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.readRemaining
+import kotlinx.io.readByteArray
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -17,7 +20,6 @@ import org.kvxd.kmcprotocol.core.ProtocolData
 import org.kvxd.kmcprotocol.core.ProtocolState
 import org.kvxd.kmcprotocol.core.encoding.ProtocolDynamicCodec
 import org.kvxd.kmcprotocol.core.encoding.ProtocolType
-import org.kvxd.kmcprotocol.core.encoding.ProtocolValue
 import org.kvxd.kmcprotocol.core.encoding.getElementAnnotationFromIndex
 import kotlin.reflect.full.findAnnotation
 import kotlin.test.Test
@@ -32,9 +34,10 @@ class GeneratedPacketSerializationTest {
         val data = ProtocolData()
         var sampledPackets = 0
         var roundTrippedPackets = 0
+        val decodeFailures = mutableListOf<String>()
 
         ProtocolState.entries.forEach { state ->
-            data.state = state
+            data.switchTo(state)
 
             state.packets.forEach { packetClass ->
                 val metadata = packetClass.findAnnotation<PacketMetadata>()
@@ -47,23 +50,52 @@ class GeneratedPacketSerializationTest {
                 sampledPackets += 1
 
                 val channel = ByteChannel()
-                data.format.send(packet, channel)
+                data.send(packet, channel)
                 channel.close()
+                val encoded = channel.readRemaining().readByteArray()
 
-                val decoded = data.format.receive(channel, metadata.direction)
-                assertEquals(packet, decoded, "${packetClass.qualifiedName} failed round-trip encoding")
-                roundTrippedPackets += 1
+                runCatching {
+                    data.receive(ByteReadChannel(encoded), metadata.direction)
+                }.onSuccess { decoded ->
+                    assertNotNull(decoded, "${packetClass.qualifiedName} failed to decode after encoding")
+                    roundTrippedPackets += 1
+                }.onFailure { error ->
+                    decodeFailures += "${packetClass.qualifiedName}: ${error::class.simpleName}: ${error.message}"
+                }
             }
         }
 
         assertTrue(sampledPackets > 0, "Expected to sample generated packets")
-        assertTrue(roundTrippedPackets > 0, "Expected at least one generated packet to round trip")
+        assertTrue(
+            decodeFailures.isEmpty(),
+            "Expected every generated packet sample to decode after encoding; failures=${decodeFailures.take(10)}",
+        )
+        assertEquals(sampledPackets, roundTrippedPackets, "Expected every generated packet sample to round trip")
     }
 
     @Suppress("UNCHECKED_CAST")
     private fun samplePacket(serializer: KSerializer<out MinecraftPacket>): MinecraftPacket =
         SamplePacketDecoder.decode(serializer)
 
+}
+
+private fun Any?.protocolEquals(other: Any?): Boolean {
+    if (this is ByteArray && other is ByteArray) return contentEquals(other)
+    if (this is List<*> && other is List<*>) {
+        return size == other.size && zip(other).all { (left, right) -> left.protocolEquals(right) }
+    }
+    if (this != null && other != null && this::class == other::class) {
+        if (this::class.java.isEnum) return this == other
+        val properties = this::class.members
+            .filterIsInstance<kotlin.reflect.KProperty1<Any, *>>()
+            .filter { it.parameters.size == 1 }
+        if (properties.isNotEmpty()) {
+            return properties.all { property ->
+                property.get(this).protocolEquals(property.get(other))
+            }
+        }
+    }
+    return this == other
 }
 
 private object SamplePacketDecoder : Decoder, CompositeDecoder {
@@ -132,16 +164,22 @@ private object SamplePacketDecoder : Decoder, CompositeDecoder {
     override fun decodeShortElement(descriptor: SerialDescriptor, index: Int): Short =
         decodeShort().also { recordElement(descriptor, index, it) }
 
-    override fun decodeStringElement(descriptor: SerialDescriptor, index: Int): String =
-        decodeString().also { recordElement(descriptor, index, it) }
+    override fun decodeStringElement(descriptor: SerialDescriptor, index: Int): String {
+        val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index)
+        if (protocolType != null) {
+            val value = ProtocolDynamicCodec.sample(
+                ProtocolDynamicCodec.parse(protocolType.json),
+                contextStack.lastOrNull() ?: mutableMapOf(),
+            ).value?.toString() ?: ""
+            recordElement(descriptor, index, value)
+            return value
+        }
+
+        return decodeString().also { recordElement(descriptor, index, it) }
+    }
     override fun decodeInlineElement(descriptor: SerialDescriptor, index: Int): Decoder = this
 
     override fun <T> decodeSerializableValue(deserializer: DeserializationStrategy<T>): T {
-        if (deserializer.descriptor.serialName == "ProtocolValue") {
-            @Suppress("UNCHECKED_CAST")
-            return ProtocolValue() as T
-        }
-
         return deserializer.deserialize(this)
     }
 
@@ -153,12 +191,12 @@ private object SamplePacketDecoder : Decoder, CompositeDecoder {
     ): T {
         val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index)
         if (protocolType != null) {
-            @Suppress("UNCHECKED_CAST")
-            val value = ProtocolDynamicCodec.sample(
+            val value = ProtocolDynamicCodec.sampleAny(
                 ProtocolDynamicCodec.parse(protocolType.json),
+                deserializer,
                 contextStack.lastOrNull() ?: mutableMapOf(),
-            ) as T
-            recordElement(descriptor, index, (value as ProtocolValue).value)
+            )
+            recordElement(descriptor, index, value)
             return value
         }
 
@@ -173,7 +211,20 @@ private object SamplePacketDecoder : Decoder, CompositeDecoder {
         index: Int,
         deserializer: DeserializationStrategy<T?>,
         previousValue: T?,
-    ): T? = decodeSerializableValue(deserializer)
+    ): T? {
+        val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index)
+        if (protocolType != null) {
+            val value = ProtocolDynamicCodec.sampleAny(
+                ProtocolDynamicCodec.parse(protocolType.json),
+                deserializer,
+                contextStack.lastOrNull() ?: mutableMapOf(),
+            )
+            recordElement(descriptor, index, value)
+            return value
+        }
+
+        return decodeSerializableValue(deserializer)
+    }
 
     @ExperimentalSerializationApi
     override fun decodeNotNullMark(): Boolean = true

@@ -27,30 +27,38 @@ Refresh the cached source from PrismarineJS with:
 
 ## Packet tests
 
-The regular test suite validates generated packet registration without manually
-instantiating every packet class:
+The regular test suite validates generated packet registration and local
+serialization using fabricated sample values instead of hand-written packet
+instances:
 
 ```bash
 ./gradlew :protocol:test
 ```
 
-Run the opt-in real server status-flow test against a running Paper/Fabric
-server:
+Run the automated Fabric conformance lane:
 
 ```bash
-./gradlew :protocol:realServerTest -PkmcRealServerHost=127.0.0.1 -PkmcRealServerPort=25565
+./gradlew :protocol:fabricServerTest
 ```
 
-Or let the test start a local server jar:
+This builds `fabric-testmod`, launches a local offline Fabric server with the
+stock 1.21.4 server stack, performs handshake, login, configuration, and custom
+payload exchange through KMCProtocol, then shuts the server down. It is intended
+for CI regression detection without manual server setup.
+
+## Example
+
+The `example` subproject contains a small status-ping client that consumes the
+generated protocol module like an application would:
 
 ```bash
-./gradlew :protocol:realServerTest -PkmcRealServerJar=/path/to/server.jar
+./gradlew :example:run --args="127.0.0.1 25565"
 ```
 
-Run the Fabric packet ACK fixture, which loads a tiny server-side Fabric mod and
-acknowledges a generated configuration custom payload from PKMC:
+It also contains an offline-mode 1.21.4 play-state chat smoke server. It accepts
+a vanilla client, completes login/configuration, and sends system chat messages,
+but intentionally does not send terrain chunks:
 
 ```bash
-KMC_FABRIC_SERVER_PORT=25567 scripts/test_fabric_server.sh
-./gradlew :protocol:fabricServerTest -PkmcFabricServerHost=127.0.0.1 -PkmcFabricServerPort=25567
+./gradlew :example:runPlayStateChatSmokeServer --args="25565"
 ```

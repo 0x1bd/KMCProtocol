@@ -91,6 +91,16 @@ class MinecraftEncoder(data: ProtocolData, private val channel: ByteWriteChannel
     }
 
     override fun encodeStringElement(descriptor: SerialDescriptor, index: Int, value: String) {
+        val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index)
+        if (protocolType != null) {
+            val context = contextStack.lastOrNull() ?: mutableMapOf()
+            write {
+                ProtocolDynamicCodec.encodeAny(ProtocolDynamicCodec.parse(protocolType.json), value, channel, context)
+            }
+            recordElement(descriptor, index, value)
+            return
+        }
+
         encodeString(value)
         recordElement(descriptor, index, value)
     }
@@ -110,6 +120,16 @@ class MinecraftEncoder(data: ProtocolData, private val channel: ByteWriteChannel
         serializer: SerializationStrategy<T>,
         value: T?
     ) {
+        val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index)
+        if (protocolType != null) {
+            val context = contextStack.lastOrNull() ?: mutableMapOf()
+            write {
+                ProtocolDynamicCodec.encodeAny(ProtocolDynamicCodec.parse(protocolType.json), value, channel, context)
+            }
+            recordElement(descriptor, index, value)
+            return
+        }
+
         encodeNullableSerializableValue(serializer, value)
     }
 
@@ -120,12 +140,12 @@ class MinecraftEncoder(data: ProtocolData, private val channel: ByteWriteChannel
         value: T
     ) {
         val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index)
-        if (protocolType != null && value is ProtocolValue) {
+        if (protocolType != null) {
             val context = contextStack.lastOrNull() ?: mutableMapOf()
             write {
-                ProtocolDynamicCodec.encode(ProtocolDynamicCodec.parse(protocolType.json), value, channel, context)
+                ProtocolDynamicCodec.encodeAny(ProtocolDynamicCodec.parse(protocolType.json), value, channel, context)
             }
-            recordElement(descriptor, index, value.value)
+            recordElement(descriptor, index, value)
             return
         }
 

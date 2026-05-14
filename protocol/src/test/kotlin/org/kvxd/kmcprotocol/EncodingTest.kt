@@ -39,10 +39,10 @@ class EncodingTest {
 
         val channel = ByteChannel()
 
-        data.format.send(packet, channel)
+        data.send(packet, channel)
         channel.close()
 
-        val decoded = data.format.receive(channel, Direction.Serverbound)
+        val decoded = data.receive(channel, Direction.Serverbound)
 
         assertEquals(packet, decoded)
     }

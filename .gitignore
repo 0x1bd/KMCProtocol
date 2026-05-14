@@ -2,10 +2,11 @@
 /buildSrc/build/
 /buildSrc/.gradle/
 /test_server/
-/fabric-testmod/run/
 /.kotlin/
 /.idea/
 /.gradle/
 /protocol/build/
-/fabric-testmod/build
-/fabric-testmod/.gradle
+/example/build/
+/fabric-testmod/.gradle/
+/fabric-testmod/build/
+/fabric-testmod/run/

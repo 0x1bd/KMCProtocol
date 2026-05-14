@@ -30,4 +30,5 @@ plugins {
 
 rootProject.name = "KMCProtocol"
 include("protocol")
+include("example")
 include("fabric-testmod")

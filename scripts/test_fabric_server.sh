@@ -16,9 +16,11 @@ server-ip=127.0.0.1
 server-port=$PORT
 enable-query=false
 enable-rcon=false
-network-compression-threshold=-1
+network-compression-threshold=1
 max-players=4
-motd=KMCProtocol Fabric packet test server
+motd=KMCProtocol Fabric conformance server
 EOL
 
-exec ./gradlew :fabric-testmod:runServer -PkmcFabricServerPort="$PORT"
+exec ./gradlew --no-daemon :fabric-testmod:runServer \
+  -PkmcFabricServerPort="$PORT" \
+  -PkmcFabricServerRunDir="../$RUN_DIR"

@@ -1,16 +1,31 @@
 package org.kvxd.kmcprotocol.core
 
-import org.kvxd.kmcprotocol.generated.GeneratedPacketRegistry
-import kotlin.reflect.KClass
+/**
+ * Minecraft protocol state used to resolve packet ids and serializers.
+ */
+enum class ProtocolState {
+    /**
+     * Initial state used for the set-protocol handshake packet.
+     */
+    Handshake,
 
-enum class ProtocolState(
-    val packets: List<KClass<out MinecraftPacket>>
-) {
+    /**
+     * Server list ping and latency state.
+     */
+    Status,
 
-    Handshake(GeneratedPacketRegistry.handshake),
-    Status(GeneratedPacketRegistry.status),
-    Login(GeneratedPacketRegistry.login),
-    Configuration(GeneratedPacketRegistry.configuration),
-    Play(GeneratedPacketRegistry.play)
+    /**
+     * Authentication and login negotiation state.
+     */
+    Login,
 
+    /**
+     * Registry and feature negotiation state before play begins.
+     */
+    Configuration,
+
+    /**
+     * In-game packet state.
+     */
+    Play
 }

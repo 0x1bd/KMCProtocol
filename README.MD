@@ -1,64 +1,77 @@
 # KMCProtocol
 
-KMCProtocol is a kotlin library which implements the minecraft java protocol.
+KMCProtocol is a Kotlin library for the Minecraft Java protocol.
 
 ## Features
-- Encode and decode minecraft packets
+
+- Encode and decode Minecraft packets
 - Generate packet classes from PrismarineJS `minecraft-data`
-- Easily add custom packets
-- Networking with Ktor
+- Use Ktor sockets for client and server connections
+- Run local protocol checks from Gradle
 
-## Packet generation
+## Gradle Plugin
 
-Packet classes are generated during `compileKotlin` from the cached
-`protocol/src/main/minecraft-data/pc/1.21.4/protocol.json` source file.
+Apply the plugin in a Kotlin/JVM project:
 
-Use a different maintained `minecraft-data` protocol version with:
+```kotlin
+plugins {
+    kotlin("jvm")
+    id("org.kvxd.kmcprotocol")
+}
 
-```bash
-./gradlew :protocol:generateMinecraftPackets -PkmcMinecraftVersion=1.21.4
+dependencies {
+    implementation("org.kvxd:kmcprotocol:<version>")
+}
+
+kmcProtocol {
+    minecraftVersion.set("1.21.4")
+}
 ```
 
-Refresh the cached source from PrismarineJS with:
+The plugin downloads protocol data into `build/`, generates Kotlin packet
+sources, and adds the generated sources and resources to the configured source
+set. It does not require `src/main/minecraft-data` in user projects.
 
-```bash
-./gradlew :protocol:generateMinecraftPackets -PkmcMinecraftVersion=1.21.4 -PkmcRefreshProtocolData=true
+Use the generated protocol factory when opening connections:
+
+```kotlin
+val client = Client("127.0.0.1", 25565, GeneratedProtocol.protocolData())
 ```
 
-## Packet tests
+`Connection` updates common protocol flow automatically by default: handshake
+state changes, login acknowledgement, finish configuration, and compression.
+Disable this with:
 
-The regular test suite validates generated packet registration and local
-serialization using fabricated sample values instead of hand-written packet
-instances:
+```kotlin
+GeneratedProtocol.protocolData(automaticProtocolFlow = false)
+```
+
+Generated protocol types model the wire format. Keep domain helpers, such as
+vector math, in handwritten runtime types or adapters.
+
+## Development
+
+Run unit tests:
 
 ```bash
 ./gradlew :protocol:test
 ```
 
-Run the automated Fabric conformance lane:
+Run Fabric conformance tests:
 
 ```bash
 ./gradlew :protocol:fabricServerTest
 ```
 
-This builds `fabric-testmod`, launches a local offline Fabric server with the
-stock 1.21.4 server stack, performs handshake, login, configuration, and custom
-payload exchange through KMCProtocol, then shuts the server down. It is intended
-for CI regression detection without manual server setup.
-
-## Example
-
-The `example` subproject contains a small status-ping client that consumes the
-generated protocol module like an application would:
+Run the status-ping example:
 
 ```bash
 ./gradlew :example:run --args="127.0.0.1 25565"
 ```
 
-It also contains an offline-mode 1.21.4 play-state chat smoke server. It accepts
-a vanilla client, completes login/configuration, and sends system chat messages,
-but intentionally does not send terrain chunks:
+Prepare and run a local vanilla server from a plugin-applied module:
 
 ```bash
-./gradlew :example:runPlayStateChatSmokeServer --args="25565"
+./gradlew :example:prepareMinecraftServer
+./gradlew :example:runMinecraftServer
 ```

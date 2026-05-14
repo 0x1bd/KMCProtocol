@@ -11,7 +11,10 @@ import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.modules.SerializersModule
 
-class MinecraftDecoder(data: ProtocolData, private val channel: ByteReadChannel) : Decoder, CompositeDecoder {
+/**
+ * kotlinx.serialization decoder that reads packet properties from Minecraft wire format.
+ */
+class MinecraftDecoder(private val data: ProtocolData, private val channel: ByteReadChannel) : Decoder, CompositeDecoder {
 
     override val serializersModule: SerializersModule = data.serializersModule
     private val indexStack = mutableListOf<Int>()
@@ -125,7 +128,12 @@ class MinecraftDecoder(data: ProtocolData, private val channel: ByteReadChannel)
         if (protocolType != null) {
             val value = runBlocking {
                 val context = contextStack.lastOrNull() ?: mutableMapOf()
-                ProtocolDynamicCodec.decode(ProtocolDynamicCodec.parse(protocolType.json), channel, context).value?.toString() ?: ""
+                ProtocolDynamicCodec.decode(
+                    ProtocolDynamicCodec.parse(protocolType.json),
+                    channel,
+                    context,
+                    data.protocolResourcePath,
+                ).value?.toString() ?: ""
             }
             recordElement(descriptor, index, value)
             return value
@@ -166,7 +174,13 @@ class MinecraftDecoder(data: ProtocolData, private val channel: ByteReadChannel)
         if (protocolType != null) {
             val value = runBlocking {
                 val context = contextStack.lastOrNull() ?: mutableMapOf()
-                ProtocolDynamicCodec.decodeAny(ProtocolDynamicCodec.parse(protocolType.json), deserializer, channel, context)
+                ProtocolDynamicCodec.decodeAny(
+                    ProtocolDynamicCodec.parse(protocolType.json),
+                    deserializer,
+                    channel,
+                    context,
+                    data.protocolResourcePath,
+                )
             }
             recordElement(descriptor, index, value)
             return value
@@ -185,7 +199,13 @@ class MinecraftDecoder(data: ProtocolData, private val channel: ByteReadChannel)
         if (protocolType != null) {
             val value = runBlocking {
                 val context = contextStack.lastOrNull() ?: mutableMapOf()
-                ProtocolDynamicCodec.decodeAny(ProtocolDynamicCodec.parse(protocolType.json), deserializer, channel, context)
+                ProtocolDynamicCodec.decodeAny(
+                    ProtocolDynamicCodec.parse(protocolType.json),
+                    deserializer,
+                    channel,
+                    context,
+                    data.protocolResourcePath,
+                )
             }
             recordElement(descriptor, index, value)
             return value

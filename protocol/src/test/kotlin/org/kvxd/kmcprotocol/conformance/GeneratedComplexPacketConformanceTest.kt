@@ -1,11 +1,11 @@
 package org.kvxd.kmcprotocol.conformance
 
+import org.kvxd.kmcprotocol.generated.GeneratedProtocol
 import io.ktor.utils.io.ByteChannel
 import net.benwoodworth.knbt.NbtCompound
 import net.benwoodworth.knbt.NbtInt
 import net.benwoodworth.knbt.NbtString
 import org.kvxd.kmcprotocol.core.MinecraftPacket
-import org.kvxd.kmcprotocol.core.ProtocolData
 import org.kvxd.kmcprotocol.core.ProtocolState
 import org.kvxd.kmcprotocol.core.encoding.ProtocolValue
 import org.kvxd.kmcprotocol.network.Direction
@@ -161,13 +161,13 @@ class GeneratedComplexPacketConformanceTest {
         state: ProtocolState,
         direction: Direction,
     ): MinecraftPacket? {
-        val data = ProtocolData(state)
+        val data = GeneratedProtocol.protocolData(state)
 
         val channel = ByteChannel()
         data.send(packet, channel)
         channel.close()
 
-        val receiver = ProtocolData(state)
+        val receiver = GeneratedProtocol.protocolData(state)
         return receiver.receive(channel, direction)
     }
 }

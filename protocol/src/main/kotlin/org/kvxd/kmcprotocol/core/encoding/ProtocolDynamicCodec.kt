@@ -33,7 +33,6 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import org.kvxd.kmcprotocol.generated.GeneratedPacketRegistry
 import net.benwoodworth.knbt.NbtByte
 import net.benwoodworth.knbt.NbtByteArray
 import net.benwoodworth.knbt.NbtCompound
@@ -47,24 +46,49 @@ import net.benwoodworth.knbt.NbtLongArray
 import net.benwoodworth.knbt.NbtShort
 import net.benwoodworth.knbt.NbtString
 import net.benwoodworth.knbt.NbtTag
+import java.util.concurrent.ConcurrentHashMap
 import java.util.UUID
 import kotlin.reflect.full.memberProperties
 
+/**
+ * Encoder, decoder, and sampler for dynamic PrismarineJS protocol type definitions.
+ */
 object ProtocolDynamicCodec {
+    /**
+     * Process-wide fallback resource path for protocol.json alias resolution.
+     */
+    @Volatile
+    var protocolResourcePath: String = ""
 
+    /**
+     * Parses a protocol type JSON string into a JSON element.
+     */
     fun parse(type: String): JsonElement = Json.parseToJsonElement(type)
 
-    suspend fun encodeAny(type: JsonElement, value: Any?, channel: ByteWriteChannel, context: MutableMap<String, Any?>) {
-        encode(type, value.toProtocolValue(), channel, context)
+    /**
+     * Encodes a Kotlin value using a dynamic protocol type.
+     */
+    suspend fun encodeAny(
+        type: JsonElement,
+        value: Any?,
+        channel: ByteWriteChannel,
+        context: MutableMap<String, Any?>,
+        protocolResourcePath: String? = null,
+    ) {
+        encode(type, value.toProtocolValue(), channel, context, protocolResourcePath)
     }
 
+    /**
+     * Decodes a Kotlin value using a dynamic protocol type and deserialization strategy.
+     */
     suspend fun <T> decodeAny(
         type: JsonElement,
         deserializer: DeserializationStrategy<T>,
         channel: ByteReadChannel,
         context: MutableMap<String, Any?>,
+        protocolResourcePath: String? = null,
     ): T {
-        val value = decode(type, channel, context)
+        val value = decode(type, channel, context, protocolResourcePath)
         if (deserializer.descriptor.serialName.endsWith("ProtocolValue")) {
             @Suppress("UNCHECKED_CAST")
             return value as T
@@ -84,12 +108,16 @@ object ProtocolDynamicCodec {
         return deserializer.deserialize(ProtocolValueBackedDecoder(value.value))
     }
 
+    /**
+     * Creates a representative Kotlin value for a dynamic protocol type.
+     */
     fun <T> sampleAny(
         type: JsonElement,
         deserializer: DeserializationStrategy<T>,
         context: MutableMap<String, Any?> = mutableMapOf(),
+        protocolResourcePath: String? = null,
     ): T {
-        val value = sample(type, context)
+        val value = sample(type, context, protocolResourcePath)
         if (deserializer.descriptor.serialName.endsWith("ProtocolValue")) {
             @Suppress("UNCHECKED_CAST")
             return value as T
@@ -105,8 +133,18 @@ object ProtocolDynamicCodec {
         return deserializer.deserialize(ProtocolValueBackedDecoder(value.value))
     }
 
-    suspend fun encode(type: JsonElement, value: ProtocolValue, channel: ByteWriteChannel, context: MutableMap<String, Any?>) {
-        resolveAlias(type)?.let {
+    /**
+     * Encodes a ProtocolValue using a dynamic protocol type.
+     */
+    suspend fun encode(
+        type: JsonElement,
+        value: ProtocolValue,
+        channel: ByteWriteChannel,
+        context: MutableMap<String, Any?>,
+        protocolResourcePath: String? = null,
+    ) {
+        protocolResourcePath?.let { context[ProtocolResourcePathContextKey] = it }
+        resolveAlias(type, context)?.let {
             encode(it, value, channel, context)
             return
         }
@@ -118,21 +156,40 @@ object ProtocolDynamicCodec {
         }
     }
 
-    suspend fun decode(type: JsonElement, channel: ByteReadChannel, context: MutableMap<String, Any?>): ProtocolValue =
-        resolveAlias(type)?.let { decode(it, channel, context) } ?:
+    /**
+     * Decodes a ProtocolValue using a dynamic protocol type.
+     */
+    suspend fun decode(
+        type: JsonElement,
+        channel: ByteReadChannel,
+        context: MutableMap<String, Any?>,
+        protocolResourcePath: String? = null,
+    ): ProtocolValue {
+        protocolResourcePath?.let { context[ProtocolResourcePathContextKey] = it }
+        return resolveAlias(type, context)?.let { decode(it, channel, context) } ?:
         when (type) {
             is JsonPrimitive -> ProtocolValue(decodeScalar(type.content, channel))
             is JsonArray -> decodeCompound(type, channel, context)
             else -> error("Unsupported protocol type shape: $type")
         }
+    }
 
-    fun sample(type: JsonElement, context: MutableMap<String, Any?> = mutableMapOf()): ProtocolValue =
-        resolveAlias(type)?.let { sample(it, context) } ?:
+    /**
+     * Creates a representative ProtocolValue for a dynamic protocol type.
+     */
+    fun sample(
+        type: JsonElement,
+        context: MutableMap<String, Any?> = mutableMapOf(),
+        protocolResourcePath: String? = null,
+    ): ProtocolValue {
+        protocolResourcePath?.let { context[ProtocolResourcePathContextKey] = it }
+        return resolveAlias(type, context)?.let { sample(it, context) } ?:
         when (type) {
             is JsonPrimitive -> sampleScalar(type.content)
             is JsonArray -> sampleCompound(type, context)
             else -> ProtocolValue()
         }
+    }
 
     private suspend fun encodeCompound(
         type: JsonArray,
@@ -768,11 +825,11 @@ object ProtocolDynamicCodec {
             )
         }
 
-    private fun resolveAlias(type: JsonElement): JsonElement? {
+    private fun resolveAlias(type: JsonElement, context: Map<String, Any?>): JsonElement? {
         val name = (type as? JsonPrimitive)?.contentOrNull ?: return null
         if (name in supportedScalarTypes || name == "void") return null
 
-        val alias = protocolTypes[name] ?: return null
+        val alias = protocolTypes(context)[name] ?: return null
         if ((alias as? JsonPrimitive)?.contentOrNull == "native") return null
         return alias
     }
@@ -799,13 +856,29 @@ object ProtocolDynamicCodec {
         "entityMetadataLoop",
     )
 
-    private val protocolTypes: Map<String, JsonElement> by lazy {
-        val resourcePath = GeneratedPacketRegistry.protocolResourcePath
+    private val protocolTypesByResourcePath = ConcurrentHashMap<String, Map<String, JsonElement>>()
+
+    private fun protocolTypes(context: Map<String, Any?>): Map<String, JsonElement> =
+        protocolTypesByResourcePath.computeIfAbsent(context.protocolResourcePath()) { resourcePath ->
+            loadProtocolTypes(resourcePath)
+        }
+
+    private fun Map<String, Any?>.protocolResourcePath(): String {
+        val resourcePath = (this[ProtocolResourcePathContextKey] as? String)
+            ?: protocolResourcePath
+        return resourcePath.takeIf { it.isNotBlank() }
+            ?: error(
+                "ProtocolDynamicCodec requires a protocolResourcePath. Use generated ProtocolData or pass " +
+                    "protocolResourcePath to ProtocolDynamicCodec directly."
+            )
+    }
+
+    private fun loadProtocolTypes(resourcePath: String): Map<String, JsonElement> {
         val resource = Thread.currentThread().contextClassLoader.getResourceAsStream(resourcePath)
             ?: ProtocolDynamicCodec::class.java.classLoader.getResourceAsStream(resourcePath)
             ?: error("Missing bundled minecraft-data protocol.json resource: $resourcePath")
 
-        resource.use {
+        return resource.use {
             val protocol = Json.parseToJsonElement(it.bufferedReader().readText()).jsonObject
             buildMap {
                 putAll(protocol["types"]!!.jsonObject)
@@ -820,6 +893,8 @@ object ProtocolDynamicCodec {
     }
 
     private val emptyNbt = NbtCompound(emptyMap())
+
+    private const val ProtocolResourcePathContextKey = "\u0000kmc.protocolResourcePath"
 
     private const val NBT_END = 0
     private const val NBT_BYTE = 1

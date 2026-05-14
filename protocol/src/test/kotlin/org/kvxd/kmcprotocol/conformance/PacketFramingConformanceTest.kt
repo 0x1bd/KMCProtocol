@@ -1,7 +1,7 @@
 package org.kvxd.kmcprotocol.conformance
 
+import org.kvxd.kmcprotocol.generated.GeneratedProtocol
 import io.ktor.utils.io.ByteChannel
-import org.kvxd.kmcprotocol.core.ProtocolData
 import org.kvxd.kmcprotocol.network.Direction
 import org.kvxd.kmcprotocol.packets.generated.handshake.serverbound.ServerboundSetProtocolPacket
 import kotlin.test.Test
@@ -15,8 +15,8 @@ class PacketFramingConformanceTest {
         val packet = ServerboundSetProtocolPacket(769, "localhost", 25565, 2)
         val sharedSecret = ByteArray(16) { index -> (index * 7).toByte() }
 
-        val sender = ProtocolData()
-        val receiver = ProtocolData()
+        val sender = GeneratedProtocol.protocolData()
+        val receiver = GeneratedProtocol.protocolData()
         sender.enableEncryption(sharedSecret)
         receiver.enableEncryption(sharedSecret)
 
@@ -32,8 +32,8 @@ class PacketFramingConformanceTest {
         val packet = ServerboundSetProtocolPacket(769, "localhost", 25565, 2)
         val sharedSecret = ByteArray(16) { index -> (index * 11).toByte() }
 
-        val sender = ProtocolData()
-        val receiver = ProtocolData()
+        val sender = GeneratedProtocol.protocolData()
+        val receiver = GeneratedProtocol.protocolData()
         sender.enableCompression(1)
         receiver.enableCompression(1)
         sender.enableEncryption(sharedSecret)

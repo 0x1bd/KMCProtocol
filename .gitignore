@@ -10,3 +10,5 @@
 /fabric-testmod/.gradle/
 /fabric-testmod/build/
 /fabric-testmod/run/
+/gradle-plugin/.gradle/
+/gradle-plugin/build/

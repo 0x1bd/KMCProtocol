@@ -9,6 +9,7 @@ import net.benwoodworth.knbt.NbtCompound
 import net.benwoodworth.knbt.NbtString
 import org.kvxd.kmcprotocol.core.KmcProtocolException
 import org.kvxd.kmcprotocol.core.ProtocolState
+import org.kvxd.kmcprotocol.generated.GeneratedProtocol
 import org.kvxd.kmcprotocol.network.server.Server
 import org.kvxd.kmcprotocol.network.server.ServerSession
 import org.kvxd.kmcprotocol.packets.generated.configuration.clientbound.ClientboundCommonSelectKnownPacksPacket
@@ -38,7 +39,7 @@ private val VanillaKnownPack = PacksEntry("minecraft", "core", "1.21.4")
 
 fun main(args: Array<String>) = runBlocking {
     val port = args.getOrNull(0)?.toIntOrNull() ?: 25565
-    val server = Server(InetSocketAddress("0.0.0.0", port))
+    val server = Server(InetSocketAddress("0.0.0.0", port)) { GeneratedProtocol.protocolData() }
 
     launch { server.bind() }
     server.awaitBound()

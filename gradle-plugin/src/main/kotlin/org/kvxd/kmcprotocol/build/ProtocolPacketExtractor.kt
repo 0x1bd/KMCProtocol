@@ -34,7 +34,7 @@ internal class ProtocolPacketExtractor(
                         id = packet.id,
                         sourceName = packet.name,
                         className = className,
-                        packageName = "${options.basePackage}.packets.generated.${state.packageName}.${direction.packageName}",
+                        packageName = "${options.packetPackage}.${state.packageName}.${direction.packageName}",
                         fields = fields,
                     )
                 }

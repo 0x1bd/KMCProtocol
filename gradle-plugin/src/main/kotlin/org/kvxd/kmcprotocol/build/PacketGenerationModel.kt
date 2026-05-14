@@ -6,7 +6,9 @@ import java.nio.file.Path
 
 internal data class PacketGenerationOptions(
     val minecraftVersion: String,
-    val basePackage: String,
+    val runtimePackage: String,
+    val packetPackage: String,
+    val registryPackage: String,
     val serverboundPrefix: String,
     val clientboundPrefix: String,
     val outputDirectory: Path,

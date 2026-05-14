@@ -1,6 +1,6 @@
 package org.kvxd.kmcprotocol
 
-import org.kvxd.kmcprotocol.core.ProtocolData
+import org.kvxd.kmcprotocol.generated.GeneratedProtocol
 import org.kvxd.kmcprotocol.core.encoding.MinecraftDecoder
 import org.kvxd.kmcprotocol.core.encoding.MinecraftEncoder
 import org.kvxd.kmcprotocol.network.Direction
@@ -17,7 +17,7 @@ class EncodingTest {
     fun `test encoding and decoding of all types`() {
         val packet = generateTestPacket()
 
-        val data = ProtocolData()
+        val data = GeneratedProtocol.protocolData()
 
         val channel = ByteChannel()
 
@@ -35,7 +35,7 @@ class EncodingTest {
     fun `test encoding and decoding of intention packet with packet registration`() = runTest {
         val packet = ServerboundSetProtocolPacket(769, "localhost", 25565, 1)
 
-        val data = ProtocolData()
+        val data = GeneratedProtocol.protocolData()
 
         val channel = ByteChannel()
 

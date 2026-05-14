@@ -1,6 +1,7 @@
 package org.kvxd.kmcprotocol
 
 import org.kvxd.kmcprotocol.core.ProtocolState
+import org.kvxd.kmcprotocol.generated.GeneratedProtocol
 import org.kvxd.kmcprotocol.network.client.Client
 import org.kvxd.kmcprotocol.network.server.Server
 import org.kvxd.kmcprotocol.packets.generated.configuration.clientbound.ClientboundFinishConfigurationPacket
@@ -24,7 +25,7 @@ class TestEmulated {
 
     @Test
     fun `emulated status flow`() = runBlocking {
-        val server = Server(InetSocketAddress("127.0.0.1", 0))
+        val server = Server(InetSocketAddress("127.0.0.1", 0)) { GeneratedProtocol.protocolData() }
 
         val serverJob = launch {
             server.bind()
@@ -33,7 +34,7 @@ class TestEmulated {
         server.awaitBound()
         val port = (server.localAddress as InetSocketAddress).port
 
-        val client = Client(InetSocketAddress("127.0.0.1", port))
+        val client = Client(InetSocketAddress("127.0.0.1", port), GeneratedProtocol.protocolData())
         val session = withTimeout(5_000.milliseconds) { server.accept() }
 
         client.send(ServerboundSetProtocolPacket(769, "localhost", port, 1))
@@ -51,8 +52,10 @@ class TestEmulated {
     }
 
     @Test
-    fun `emulated login configuration and play flow with compression`() = runBlocking {
-        val server = Server(InetSocketAddress("127.0.0.1", 0))
+    fun `automatic protocol flow can be disabled`() = runBlocking {
+        val server = Server(InetSocketAddress("127.0.0.1", 0)) {
+            GeneratedProtocol.protocolData(automaticProtocolFlow = false)
+        }
 
         val serverJob = launch {
             server.bind()
@@ -60,7 +63,33 @@ class TestEmulated {
 
         server.awaitBound()
         val port = (server.localAddress as InetSocketAddress).port
-        val client = Client(InetSocketAddress("127.0.0.1", port))
+        val client = Client(
+            InetSocketAddress("127.0.0.1", port),
+            GeneratedProtocol.protocolData(automaticProtocolFlow = false),
+        )
+        val session = withTimeout(5_000.milliseconds) { server.accept() }
+
+        client.send(ServerboundSetProtocolPacket(769, "localhost", port, 1))
+        assertEquals(ProtocolState.Handshake, client.data.state)
+        assertIs<ServerboundSetProtocolPacket>(withTimeout(5_000.milliseconds) { session.receive() })
+        assertEquals(ProtocolState.Handshake, session.data.state)
+
+        client.close()
+        server.close()
+        serverJob.cancelAndJoin()
+    }
+
+    @Test
+    fun `emulated login configuration and play flow with compression`() = runBlocking {
+        val server = Server(InetSocketAddress("127.0.0.1", 0)) { GeneratedProtocol.protocolData() }
+
+        val serverJob = launch {
+            server.bind()
+        }
+
+        server.awaitBound()
+        val port = (server.localAddress as InetSocketAddress).port
+        val client = Client(InetSocketAddress("127.0.0.1", port), GeneratedProtocol.protocolData())
 
         val serverSessionJob = launch {
             val session = withTimeout(5_000.milliseconds) { server.accept() }

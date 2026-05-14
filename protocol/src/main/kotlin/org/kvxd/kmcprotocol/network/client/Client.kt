@@ -9,6 +9,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 
+/**
+ * TCP client connection for reading and writing Minecraft packets.
+ */
 class Client private constructor(
     protocol: ProtocolData,
     socket: Socket,
@@ -19,10 +22,22 @@ class Client private constructor(
     socket
 ) {
 
+    /**
+     * Connects to a socket address using the supplied protocol context.
+     */
     constructor(
         address: SocketAddress,
         protocol: ProtocolData = ProtocolData()
     ) : this(protocol, createSocket(address))
+
+    /**
+     * Connects to a host and port using the supplied protocol context.
+     */
+    constructor(
+        host: String,
+        port: Int,
+        protocol: ProtocolData = ProtocolData(),
+    ) : this(InetSocketAddress(host, port), protocol)
 
     private constructor(
         protocol: ProtocolData,

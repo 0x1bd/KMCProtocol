@@ -3,6 +3,7 @@ package org.kvxd.kmcprotocol.conformance
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import io.ktor.network.sockets.InetSocketAddress
+import org.kvxd.kmcprotocol.generated.GeneratedProtocol
 import org.kvxd.kmcprotocol.network.client.Client
 import org.kvxd.kmcprotocol.packets.generated.configuration.clientbound.ClientboundCustomPayloadPacket
 import org.kvxd.kmcprotocol.packets.generated.configuration.serverbound.ServerboundCustomPayloadPacket
@@ -17,7 +18,7 @@ class FabricConfigurationPayloadConformanceTest {
         if (!FabricServerFixture.enabled()) return@runBlocking
 
         FabricServerFixture.withServer { host, port ->
-            val client = Client(InetSocketAddress(host, port))
+            val client = Client(InetSocketAddress(host, port), GeneratedProtocol.protocolData())
             try {
                 client.loginToConfiguration(host, port)
 

@@ -3,11 +3,17 @@ package org.kvxd.kmcprotocol.core
 import org.kvxd.kmcprotocol.network.Direction
 import kotlin.reflect.KClass
 
+/**
+ * Base exception for protocol, packet, and connection failures raised by KMCProtocol.
+ */
 open class KmcProtocolException(
     message: String,
     cause: Throwable? = null,
 ) : RuntimeException(message, cause)
 
+/**
+ * Indicates that a packet could not be encoded for the current protocol state.
+ */
 class KmcPacketEncodeException(
     packetClass: KClass<out MinecraftPacket>,
     state: ProtocolState,
@@ -22,6 +28,9 @@ class KmcPacketEncodeException(
     cause,
 )
 
+/**
+ * Indicates that a packet frame or payload could not be decoded.
+ */
 class KmcPacketDecodeException(
     state: ProtocolState,
     direction: Direction,
@@ -41,6 +50,9 @@ class KmcPacketDecodeException(
     cause,
 )
 
+/**
+ * Indicates that a client or server connection failed while reading, writing, or managing transport state.
+ */
 class KmcConnectionException(
     operation: String,
     endpoint: String,

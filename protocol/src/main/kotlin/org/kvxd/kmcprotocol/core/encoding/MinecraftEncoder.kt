@@ -12,7 +12,10 @@ import kotlinx.serialization.encoding.CompositeEncoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.SerializersModule
 
-class MinecraftEncoder(data: ProtocolData, private val channel: ByteWriteChannel) : Encoder, CompositeEncoder {
+/**
+ * kotlinx.serialization encoder that writes packet properties to Minecraft wire format.
+ */
+class MinecraftEncoder(private val data: ProtocolData, private val channel: ByteWriteChannel) : Encoder, CompositeEncoder {
 
     override val serializersModule: SerializersModule = data.serializersModule
     private val contextStack = mutableListOf<MutableMap<String, Any?>>()
@@ -95,7 +98,13 @@ class MinecraftEncoder(data: ProtocolData, private val channel: ByteWriteChannel
         if (protocolType != null) {
             val context = contextStack.lastOrNull() ?: mutableMapOf()
             write {
-                ProtocolDynamicCodec.encodeAny(ProtocolDynamicCodec.parse(protocolType.json), value, channel, context)
+                ProtocolDynamicCodec.encodeAny(
+                    ProtocolDynamicCodec.parse(protocolType.json),
+                    value,
+                    channel,
+                    context,
+                    data.protocolResourcePath,
+                )
             }
             recordElement(descriptor, index, value)
             return
@@ -124,7 +133,13 @@ class MinecraftEncoder(data: ProtocolData, private val channel: ByteWriteChannel
         if (protocolType != null) {
             val context = contextStack.lastOrNull() ?: mutableMapOf()
             write {
-                ProtocolDynamicCodec.encodeAny(ProtocolDynamicCodec.parse(protocolType.json), value, channel, context)
+                ProtocolDynamicCodec.encodeAny(
+                    ProtocolDynamicCodec.parse(protocolType.json),
+                    value,
+                    channel,
+                    context,
+                    data.protocolResourcePath,
+                )
             }
             recordElement(descriptor, index, value)
             return
@@ -143,7 +158,13 @@ class MinecraftEncoder(data: ProtocolData, private val channel: ByteWriteChannel
         if (protocolType != null) {
             val context = contextStack.lastOrNull() ?: mutableMapOf()
             write {
-                ProtocolDynamicCodec.encodeAny(ProtocolDynamicCodec.parse(protocolType.json), value, channel, context)
+                ProtocolDynamicCodec.encodeAny(
+                    ProtocolDynamicCodec.parse(protocolType.json),
+                    value,
+                    channel,
+                    context,
+                    data.protocolResourcePath,
+                )
             }
             recordElement(descriptor, index, value)
             return

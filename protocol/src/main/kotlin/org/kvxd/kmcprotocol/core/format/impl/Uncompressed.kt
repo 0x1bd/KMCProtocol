@@ -1,5 +1,7 @@
 package org.kvxd.kmcprotocol.core.format.impl
 
+import org.kvxd.kmcprotocol.core.KmcPacketDecodeException
+import org.kvxd.kmcprotocol.core.KmcPacketEncodeException
 import org.kvxd.kmcprotocol.core.MinecraftPacket
 import org.kvxd.kmcprotocol.core.ProtocolData
 import org.kvxd.kmcprotocol.core.encoding.MinecraftDecoder
@@ -10,17 +12,27 @@ import org.kvxd.kmcprotocol.core.encoding.writeVarInt
 import org.kvxd.kmcprotocol.network.Direction
 import io.ktor.utils.io.*
 import kotlinx.io.readByteArray
+import kotlinx.serialization.KSerializer
 
+/**
+ * Legacy uncompressed Minecraft packet format.
+ */
 class Uncompressed(private val data: ProtocolData) : PacketFormat {
 
     override suspend fun send(packet: MinecraftPacket, channel: ByteWriteChannel) {
-        val metadata = data.registry.getPacketMetadata(data.state, packet) ?: error("Packet not registered")
+        val metadata = data.registry.getPacketMetadata(data.state, packet)
+            ?: throw KmcPacketEncodeException(
+                packetClass = packet::class,
+                state = data.state,
+                details = "No packet registration exists for this packet class in state ${data.state}.",
+            )
 
         val content = ByteChannel().apply {
             writeVarInt(metadata.id)
 
-            val serializer = data.registry.getPacketSerializerByClass(data.state, packet::class)
-            serializer!!.serialize(MinecraftEncoder(data, this), packet)
+            @Suppress("UNCHECKED_CAST")
+            val serializer = metadata.serializer as KSerializer<MinecraftPacket>
+            serializer.serialize(MinecraftEncoder(data, this), packet)
 
             flush()
             close()
@@ -45,6 +57,13 @@ class Uncompressed(private val data: ProtocolData) : PacketFormat {
         val serializer = data.registry.getPacketSerializerById(data.state, id, expectedDirection)
 
         return serializer?.deserialize(MinecraftDecoder(data, packetChannel))
+            ?: throw KmcPacketDecodeException(
+                state = data.state,
+                direction = expectedDirection,
+                packetId = id,
+                frameLength = length,
+                details = "No packet serializer is registered for packet id 0x${id.toString(16)} in ${data.state}/$expectedDirection.",
+            )
     }
 
 }

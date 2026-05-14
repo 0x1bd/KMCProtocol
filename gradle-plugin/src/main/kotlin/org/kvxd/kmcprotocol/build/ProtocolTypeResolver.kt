@@ -27,9 +27,9 @@ internal class ProtocolTypeResolver(
 ) {
     private val serialName = ClassName("kotlinx.serialization", "SerialName")
     private val serializable = ClassName("kotlinx.serialization", "Serializable")
-    private val protocolEnum = ClassName("${options.basePackage}.core.encoding", "ProtocolEnum")
-    private val protocolEnumValue = ClassName("${options.basePackage}.core.encoding", "ProtocolEnumValue")
-    private val protocolValue = ClassName("${options.basePackage}.core.encoding", "ProtocolValue")
+    private val protocolEnum = ClassName("${options.runtimePackage}.core.encoding", "ProtocolEnum")
+    private val protocolEnumValue = ClassName("${options.runtimePackage}.core.encoding", "ProtocolEnumValue")
+    private val protocolValue = ClassName("${options.runtimePackage}.core.encoding", "ProtocolValue")
     private val byteArray = ClassName("kotlin", "ByteArray")
     private val nbtTag = ClassName("net.benwoodworth.knbt", "NbtTag")
 
@@ -125,7 +125,7 @@ internal class ProtocolTypeResolver(
         emittedTypes[key]?.let { return ResolvedType(it, protocolType = type.toString()) }
         val className = allocatedTypeName(baseClassName, key)
 
-        val packageName = "${options.basePackage}.packets.generated.types"
+        val packageName = "${options.packetPackage}.types"
         val enumClass = ClassName(packageName, className)
         val enumBuilder = TypeSpec.enumBuilder(className)
             .addAnnotation(serializable)
@@ -160,7 +160,7 @@ internal class ProtocolTypeResolver(
         emittedTypes[key]?.let { return ResolvedType(it, protocolType = type.toString()) }
         val className = allocatedTypeName(baseClassName, key)
 
-        val packageName = "${options.basePackage}.packets.generated.types"
+        val packageName = "${options.packetPackage}.types"
         val generatedClass = ClassName(packageName, className)
         emittedTypes[key] = generatedClass
 

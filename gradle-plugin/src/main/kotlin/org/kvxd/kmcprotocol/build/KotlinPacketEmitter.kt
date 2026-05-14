@@ -4,6 +4,7 @@ import com.squareup.kotlinpoet.AnnotationSpec
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FileSpec
+import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
@@ -13,13 +14,16 @@ import com.squareup.kotlinpoet.WildcardTypeName
 internal class KotlinPacketEmitter(
     private val options: PacketGenerationOptions,
 ) {
-    private val minecraftPacket = ClassName("${options.basePackage}.core", "MinecraftPacket")
-    private val packetMetadata = ClassName("${options.basePackage}.core", "PacketMetadata")
-    private val protocolState = ClassName("${options.basePackage}.core", "ProtocolState")
-    private val protocolNumber = ClassName("${options.basePackage}.core.encoding", "ProtocolNumber")
-    private val protocolType = ClassName("${options.basePackage}.core.encoding", "ProtocolType")
-    private val numberEncoding = ClassName("${options.basePackage}.core.encoding", "NumberEncoding")
-    private val direction = ClassName("${options.basePackage}.network", "Direction")
+    private val minecraftPacket = ClassName("${options.runtimePackage}.core", "MinecraftPacket")
+    private val packetMetadata = ClassName("${options.runtimePackage}.core", "PacketMetadata")
+    private val packetRegistry = ClassName("${options.runtimePackage}.core", "PacketRegistry")
+    private val packetRegistrySource = ClassName("${options.runtimePackage}.core", "PacketRegistrySource")
+    private val protocolData = ClassName("${options.runtimePackage}.core", "ProtocolData")
+    private val protocolState = ClassName("${options.runtimePackage}.core", "ProtocolState")
+    private val protocolNumber = ClassName("${options.runtimePackage}.core.encoding", "ProtocolNumber")
+    private val protocolType = ClassName("${options.runtimePackage}.core.encoding", "ProtocolType")
+    private val numberEncoding = ClassName("${options.runtimePackage}.core.encoding", "NumberEncoding")
+    private val direction = ClassName("${options.runtimePackage}.network", "Direction")
     private val serialName = ClassName("kotlinx.serialization", "SerialName")
     private val serializable = ClassName("kotlinx.serialization", "Serializable")
     private val kClass = ClassName("kotlin.reflect", "KClass")
@@ -34,7 +38,7 @@ internal class KotlinPacketEmitter(
             TypeSpec.classBuilder(packet.className)
                 .addModifiers(KModifier.DATA)
                 .primaryConstructor(
-                    com.squareup.kotlinpoet.FunSpec.constructorBuilder().apply {
+                    FunSpec.constructorBuilder().apply {
                         packet.fields.forEach { field ->
                             addParameter(field.propertyName, field.typeName)
                         }
@@ -49,6 +53,7 @@ internal class KotlinPacketEmitter(
         }
 
         packetType
+            .addKdoc("Generated %L packet for the %L protocol state.\n", packet.direction.sourceName, packet.state.sourceName)
             .addAnnotation(
                 AnnotationSpec.builder(packetMetadata)
                     .addMember("0x%L", packet.id.toString(16).padStart(2, '0'))
@@ -78,20 +83,26 @@ internal class KotlinPacketEmitter(
             .groupBy { Triple(it.stateName, it.directionEntry, it.id) }
             .entries
             .firstOrNull { it.value.size > 1 }
-        require(duplicate == null) {
-            val (state, direction, id) = duplicate!!.key
-            "Duplicate generated packet id 0x${id.toString(16)} for $direction in $state: " +
-                duplicate.value.joinToString { it.className.canonicalName }
+        if (duplicate != null) {
+            val (state, direction, id) = duplicate.key
+            throw IllegalArgumentException(
+                "Duplicate generated packet id 0x${id.toString(16)} for $direction in $state: " +
+                    duplicate.value.joinToString { it.className.canonicalName }
+            )
         }
 
         val registry = TypeSpec.objectBuilder("GeneratedPacketRegistry")
+            .addKdoc("Generated registry for packet classes and protocol metadata.\n")
+            .addSuperinterface(packetRegistrySource)
             .addProperty(
                 PropertySpec.builder("minecraftVersion", String::class, KModifier.CONST)
+                    .addKdoc("Minecraft data version used to generate these packets.\n")
                     .initializer("%S", options.minecraftVersion)
                     .build()
             )
             .addProperty(
                 PropertySpec.builder("protocolResourcePath", String::class, KModifier.CONST)
+                    .addKdoc("Classpath resource path for the bundled protocol.json data.\n")
                     .initializer("%S", "pc/${options.minecraftVersion}/protocol.json")
                     .build()
             )
@@ -101,18 +112,22 @@ internal class KotlinPacketEmitter(
             val statePropertyName = state.className.replaceFirstChar { it.lowercase() }
             registry.addProperty(
                 PropertySpec.builder(statePropertyName, listType)
+                    .addKdoc("Generated packet classes for the %L protocol state.\n", state.sourceName)
                     .initializer(registryInitializer(stateEntries))
                     .build()
             )
             registry.addProperty(
                 PropertySpec.builder("${statePropertyName}ById", packetIdMapType)
+                    .addKdoc("Generated packet classes for the %L protocol state grouped by direction and id.\n", state.sourceName)
                     .initializer(registryIdInitializer(stateEntries))
                     .build()
             )
         }
 
         registry.addFunction(
-            com.squareup.kotlinpoet.FunSpec.builder("packetsById")
+            FunSpec.builder("packetsById")
+                .addKdoc("Returns generated packet classes for a protocol state grouped by direction and id.\n")
+                .addModifiers(KModifier.OVERRIDE)
                 .addParameter("state", protocolState)
                 .returns(packetIdMapType)
                 .addCode(
@@ -128,10 +143,54 @@ internal class KotlinPacketEmitter(
                 .build()
         )
 
-        FileSpec.builder("${options.basePackage}.generated", "GeneratedPacketRegistry")
+        FileSpec.builder(options.registryPackage, "GeneratedPacketRegistry")
             .addFileComment("This file is generated by kmcp.\n")
             .addFileComment("Source: PrismarineJS minecraft-data protocol.json (${options.minecraftVersion}).\n")
             .addType(registry.build())
+            .build()
+            .writeTo(options.outputDirectory)
+
+        emitGeneratedProtocol()
+    }
+
+    private fun emitGeneratedProtocol() {
+        val generatedPacketRegistry = ClassName(options.registryPackage, "GeneratedPacketRegistry")
+        val generatedProtocol = TypeSpec.objectBuilder("GeneratedProtocol")
+            .addKdoc("Factory for generated packet registry and protocol data instances.\n")
+            .addFunction(
+                FunSpec.builder("packetRegistry")
+                    .addKdoc("Creates a packet registry containing the generated packet classes.\n")
+                    .returns(packetRegistry)
+                    .addStatement("return %T(listOf(%T))", packetRegistry, generatedPacketRegistry)
+                    .build()
+            )
+            .addFunction(
+                FunSpec.builder("protocolData")
+                    .addKdoc("Creates protocol data configured for the generated packet registry.\n")
+                    .addParameter(
+                        com.squareup.kotlinpoet.ParameterSpec.builder("initialState", protocolState)
+                            .defaultValue("%T.Handshake", protocolState)
+                            .build()
+                    )
+                    .addParameter(
+                        com.squareup.kotlinpoet.ParameterSpec.builder("automaticProtocolFlow", Boolean::class)
+                            .defaultValue("true")
+                            .build()
+                    )
+                    .returns(protocolData)
+                    .addStatement(
+                        "return %T(initialState = initialState, automaticProtocolFlow = automaticProtocolFlow, protocolResourcePath = %T.protocolResourcePath, registry = packetRegistry())",
+                        protocolData,
+                        generatedPacketRegistry,
+                    )
+                    .build()
+            )
+            .build()
+
+        FileSpec.builder(options.registryPackage, "GeneratedProtocol")
+            .addFileComment("This file is generated by kmcp.\n")
+            .addFileComment("Source: PrismarineJS minecraft-data protocol.json (${options.minecraftVersion}).\n")
+            .addType(generatedProtocol)
             .build()
             .writeTo(options.outputDirectory)
     }

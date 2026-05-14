@@ -1,10 +1,14 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlinx.serialization)
     application
+    id("org.kvxd.kmcprotocol")
 }
 
 group = "org.kvxd"
 version = "1.0-SNAPSHOT"
+
+val minecraftDataVersion = providers.gradleProperty("kmcMinecraftVersion")
 
 dependencies {
     implementation(project(":protocol"))
@@ -18,6 +22,16 @@ dependencies {
 
 kotlin {
     jvmToolchain(21)
+}
+
+kmcProtocol {
+    minecraftVersion.set(minecraftDataVersion)
+    refreshProtocolData.set(providers.gradleProperty("kmcRefreshProtocolData").map(String::toBoolean).orElse(false))
+    runtimePackage.set("org.kvxd.kmcprotocol")
+    packetPackage.set("org.kvxd.kmcprotocol.packets.generated")
+    registryPackage.set("org.kvxd.kmcprotocol.generated")
+    serverboundPrefix.set(providers.gradleProperty("kmcPacketServerboundPrefix").orElse("Serverbound"))
+    clientboundPrefix.set(providers.gradleProperty("kmcPacketClientboundPrefix").orElse("Clientbound"))
 }
 
 application {

@@ -9,8 +9,14 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
+/**
+ * Generic structured value used for dynamic protocol fields.
+ */
 @Serializable(with = ProtocolValueSerializer::class)
 class ProtocolValue(
+    /**
+     * Wrapped scalar, object, list, byte array, NBT value, or null.
+     */
     val value: Any? = null,
 ) {
     override fun equals(other: Any?): Boolean {
@@ -24,8 +30,19 @@ class ProtocolValue(
     override fun toString(): String = "ProtocolValue(value=${renderValue(value)})"
 
     companion object {
+        /**
+         * Creates an object value.
+         */
         fun obj(values: Map<String, ProtocolValue>) = ProtocolValue(values)
+
+        /**
+         * Creates a list value.
+         */
         fun list(values: List<ProtocolValue>) = ProtocolValue(values)
+
+        /**
+         * Creates a byte-array value.
+         */
         fun bytes(values: ByteArray) = ProtocolValue(values)
 
         private fun valuesEqual(left: Any?, right: Any?): Boolean =
@@ -55,6 +72,9 @@ class ProtocolValue(
     }
 }
 
+/**
+ * Serializer marker for ProtocolValue fields handled by MinecraftEncoder and MinecraftDecoder.
+ */
 object ProtocolValueSerializer : KSerializer<ProtocolValue> {
     override val descriptor: SerialDescriptor =
         PrimitiveSerialDescriptor("ProtocolValue", PrimitiveKind.STRING)

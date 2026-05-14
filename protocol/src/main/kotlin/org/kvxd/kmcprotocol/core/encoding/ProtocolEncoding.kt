@@ -18,40 +18,69 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialInfo
 import kotlin.experimental.and
 
+/**
+ * Numeric wire encodings supported by the Minecraft protocol.
+ */
 enum class NumberEncoding {
+    /** Signed 8-bit integer. */
     Byte,
+    /** Unsigned 8-bit integer. */
     UnsignedByte,
+    /** Signed 16-bit integer. */
     Short,
+    /** Unsigned 16-bit integer. */
     UnsignedShort,
+    /** Signed 32-bit integer. */
     Int,
+    /** Unsigned 32-bit integer. */
     UnsignedInt,
+    /** Minecraft VarInt. */
     VarInt,
+    /** Signed 64-bit integer. */
     Long,
+    /** Minecraft VarLong. */
     VarLong,
+    /** 32-bit floating-point number. */
     Float,
+    /** 64-bit floating-point number. */
     Double,
 }
 
+/**
+ * Overrides the numeric wire encoding for a generated or custom packet property.
+ */
 @OptIn(ExperimentalSerializationApi::class)
 @SerialInfo
 @Target(AnnotationTarget.PROPERTY)
 annotation class ProtocolNumber(val encoding: NumberEncoding)
 
+/**
+ * Declares the numeric wire encoding used for enum values.
+ */
 @OptIn(ExperimentalSerializationApi::class)
 @SerialInfo
 @Target(AnnotationTarget.CLASS)
 annotation class ProtocolEnum(val encoding: NumberEncoding = NumberEncoding.VarInt)
 
+/**
+ * Declares the numeric wire value for a single enum entry.
+ */
 @OptIn(ExperimentalSerializationApi::class)
 @SerialInfo
 @Target(AnnotationTarget.PROPERTY, AnnotationTarget.FIELD)
 annotation class ProtocolEnumValue(val value: Int)
 
+/**
+ * Declares a PrismarineJS protocol type used to encode and decode a dynamic packet property.
+ */
 @OptIn(ExperimentalSerializationApi::class)
 @SerialInfo
 @Target(AnnotationTarget.PROPERTY)
 annotation class ProtocolType(val json: String)
 
+/**
+ * Writes a numeric value using the selected Minecraft wire encoding.
+ */
 suspend fun ByteWriteChannel.writeNumber(encoding: NumberEncoding, value: Number) {
     when (encoding) {
         NumberEncoding.Byte -> writeByte(value.toByte())
@@ -68,6 +97,9 @@ suspend fun ByteWriteChannel.writeNumber(encoding: NumberEncoding, value: Number
     }
 }
 
+/**
+ * Reads a numeric value using the selected Minecraft wire encoding.
+ */
 suspend fun ByteReadChannel.readNumber(encoding: NumberEncoding): Number =
     when (encoding) {
         NumberEncoding.Byte -> readByte()
@@ -83,6 +115,9 @@ suspend fun ByteReadChannel.readNumber(encoding: NumberEncoding): Number =
         NumberEncoding.Double -> readDouble()
     }
 
+/**
+ * Writes a Minecraft VarInt.
+ */
 suspend fun ByteWriteChannel.writeVarInt(value: Int) {
     var current = value
     do {
@@ -92,6 +127,9 @@ suspend fun ByteWriteChannel.writeVarInt(value: Int) {
     } while (current != 0)
 }
 
+/**
+ * Reads a Minecraft VarInt.
+ */
 suspend fun ByteReadChannel.readVarInt(): Int {
     var offset = 0
     var value = 0
@@ -109,6 +147,9 @@ suspend fun ByteReadChannel.readVarInt(): Int {
     return value
 }
 
+/**
+ * Writes a Minecraft VarLong.
+ */
 suspend fun ByteWriteChannel.writeVarLong(value: Long) {
     var current = value
     do {
@@ -118,6 +159,9 @@ suspend fun ByteWriteChannel.writeVarLong(value: Long) {
     } while (current != 0L)
 }
 
+/**
+ * Reads a Minecraft VarLong.
+ */
 suspend fun ByteReadChannel.readVarLong(): Long {
     var offset = 0
     var value = 0L

@@ -1,8 +1,9 @@
 package org.kvxd.kmcprotocol
 
 import org.kvxd.kmcprotocol.core.PacketMetadata
-import org.kvxd.kmcprotocol.core.ProtocolData
 import org.kvxd.kmcprotocol.core.ProtocolState
+import org.kvxd.kmcprotocol.generated.GeneratedPacketRegistry
+import org.kvxd.kmcprotocol.generated.GeneratedProtocol
 import kotlin.reflect.full.findAnnotation
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,15 +14,18 @@ class GeneratedPacketRegistryTest {
 
     @Test
     fun `all generated packets are registered by metadata`() {
-        val data = ProtocolData()
-        val allPackets = ProtocolState.entries.flatMap { state -> state.packets.map { state to it } }
+        val data = GeneratedProtocol.protocolData()
+        val packetsByState = ProtocolState.entries.associateWith { state ->
+            GeneratedPacketRegistry.packetsById(state).values.flatMap { it.values }
+        }
+        val allPackets = packetsByState.values.flatten()
 
         assertTrue(allPackets.isNotEmpty(), "Expected generated packet registry to contain packets")
 
         ProtocolState.entries.forEach { state ->
             val packetKeys = mutableSetOf<Pair<Int, Any>>()
 
-            state.packets.forEach { packetClass ->
+            packetsByState.getValue(state).forEach { packetClass ->
                 val metadata = packetClass.findAnnotation<PacketMetadata>()
                 assertNotNull(metadata, "${packetClass.qualifiedName} is missing PacketMetadata")
                 assertTrue(
@@ -42,5 +46,12 @@ class GeneratedPacketRegistryTest {
                 assertEquals(packetClass, registeredById.packetClass)
             }
         }
+    }
+
+    @Test
+    fun `generated protocol data carries generated protocol resource path`() {
+        val data = GeneratedProtocol.protocolData()
+
+        assertEquals(GeneratedPacketRegistry.protocolResourcePath, data.protocolResourcePath)
     }
 }

@@ -14,6 +14,7 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlinx.io.readByteArray
+import kotlinx.serialization.KSerializer
 import org.kvxd.kmcprotocol.core.KmcPacketDecodeException
 import org.kvxd.kmcprotocol.core.KmcPacketEncodeException
 import org.kvxd.kmcprotocol.core.MinecraftPacket
@@ -25,6 +26,9 @@ import org.kvxd.kmcprotocol.core.encoding.writeVarInt
 import org.kvxd.kmcprotocol.core.format.PacketFormat
 import org.kvxd.kmcprotocol.network.Direction
 
+/**
+ * Default Minecraft packet format with framing, optional compression, and optional encryption.
+ */
 class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
 
     @Volatile
@@ -33,19 +37,31 @@ class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
     private var encryptCipher: Cipher? = null
     private var decryptCipher: Cipher? = null
 
+    /**
+     * Enables Minecraft packet compression using the supplied threshold.
+     */
     fun enableCompression(threshold: Int) {
         compressionThreshold = threshold
     }
 
+    /**
+     * Disables Minecraft packet compression.
+     */
     fun disableCompression() {
         compressionThreshold = null
     }
 
+    /**
+     * Enables AES/CFB8 stream encryption with the negotiated shared secret.
+     */
     fun enableEncryption(sharedSecret: ByteArray) {
         encryptCipher = createCipher(Cipher.ENCRYPT_MODE, sharedSecret)
         decryptCipher = createCipher(Cipher.DECRYPT_MODE, sharedSecret)
     }
 
+    /**
+     * Disables stream encryption.
+     */
     fun disableEncryption() {
         encryptCipher = null
         decryptCipher = null
@@ -111,8 +127,9 @@ class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
         return ByteChannel().apply {
             writeVarInt(metadata.id)
 
-            val serializer = data.registry.getPacketSerializerByClass(data.state, packet::class)
-            serializer!!.serialize(MinecraftEncoder(data, this), packet)
+            @Suppress("UNCHECKED_CAST")
+            val serializer = metadata.serializer as KSerializer<MinecraftPacket>
+            serializer.serialize(MinecraftEncoder(data, this), packet)
 
             flush()
             close()

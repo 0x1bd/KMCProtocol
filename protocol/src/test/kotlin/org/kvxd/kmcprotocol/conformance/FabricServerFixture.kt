@@ -9,6 +9,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 internal object FabricServerFixture {
+    private const val Host = "127.0.0.1"
+
     fun enabled(): Boolean =
         setting("kmc.fabricServer.enabled")?.toBooleanStrictOrNull() == true
 
@@ -18,16 +20,22 @@ internal object FabricServerFixture {
     suspend fun withServer(block: suspend (String, Int) -> Unit) {
         val projectDir = File(setting("kmc.projectDir") ?: ".").canonicalFile
         val port = setting("kmc.fabricServer.port")?.toInt() ?: freePort()
+        val runDir = projectDir.resolve("build/fabric-conformance-server-$port")
+        val loomRunDir = runDir.relativeTo(projectDir.resolve("fabric-testmod")).invariantSeparatorsPath
         val ready = CountDownLatch(1)
 
+        prepareRunDirectory(runDir, port)
+
         val process = withContext(Dispatchers.IO) {
-            ProcessBuilder(projectDir.resolve("scripts/test_fabric_server.sh").absolutePath)
+            ProcessBuilder(
+                gradleWrapper(projectDir).absolutePath,
+                "--no-daemon",
+                ":fabric-testmod:runServer",
+                "-PkmcFabricServerPort=$port",
+                "-PkmcFabricServerRunDir=$loomRunDir",
+            )
                 .directory(projectDir)
                 .redirectErrorStream(true)
-                .apply {
-                    environment()["KMC_FABRIC_SERVER_PORT"] = port.toString()
-                    environment()["KMC_FABRIC_SERVER_DIR"] = "build/fabric-conformance-server-$port"
-                }
                 .start()
         }
 
@@ -44,8 +52,8 @@ internal object FabricServerFixture {
         }
 
         try {
-            waitForServerReady("127.0.0.1", port, process, ready)
-            block("127.0.0.1", port)
+            waitForServerReady(Host, port, process, ready)
+            block(Host, port)
         } finally {
             runCatching {
                 process.outputStream.write("stop\n".toByteArray())
@@ -59,6 +67,29 @@ internal object FabricServerFixture {
             }
         }
     }
+
+    private fun prepareRunDirectory(runDir: File, port: Int) {
+        check(runDir.mkdirs() || runDir.isDirectory) {
+            "Could not create Fabric server run directory: ${runDir.absolutePath}"
+        }
+
+        runDir.resolve("eula.txt").writeText("eula=true\n")
+        runDir.resolve("server.properties").writeText(
+            """
+            online-mode=false
+            server-ip=$Host
+            server-port=$port
+            enable-query=false
+            enable-rcon=false
+            network-compression-threshold=1
+            max-players=4
+            motd=KMCProtocol Fabric conformance server
+            """.trimIndent() + "\n"
+        )
+    }
+
+    private fun gradleWrapper(projectDir: File): File =
+        projectDir.resolve(if (System.getProperty("os.name").startsWith("Windows")) "gradlew.bat" else "gradlew")
 
     private fun setting(name: String): String? =
         System.getProperty(name)?.takeIf(String::isNotBlank)

@@ -16,11 +16,12 @@ import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.modules.SerializersModule
 import org.kvxd.kmcprotocol.core.MinecraftPacket
 import org.kvxd.kmcprotocol.core.PacketMetadata
-import org.kvxd.kmcprotocol.core.ProtocolData
 import org.kvxd.kmcprotocol.core.ProtocolState
 import org.kvxd.kmcprotocol.core.encoding.ProtocolDynamicCodec
 import org.kvxd.kmcprotocol.core.encoding.ProtocolType
 import org.kvxd.kmcprotocol.core.encoding.getElementAnnotationFromIndex
+import org.kvxd.kmcprotocol.generated.GeneratedPacketRegistry
+import org.kvxd.kmcprotocol.generated.GeneratedProtocol
 import kotlin.reflect.full.findAnnotation
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -31,7 +32,7 @@ class GeneratedPacketSerializationTest {
 
     @Test
     fun `generated packets can be sample-instantiated and supported packets round trip`() = runBlocking {
-        val data = ProtocolData()
+        val data = GeneratedProtocol.protocolData()
         var sampledPackets = 0
         var roundTrippedPackets = 0
         val decodeFailures = mutableListOf<String>()
@@ -39,7 +40,7 @@ class GeneratedPacketSerializationTest {
         ProtocolState.entries.forEach { state ->
             data.switchTo(state)
 
-            state.packets.forEach { packetClass ->
+            GeneratedPacketRegistry.packetsById(state).values.flatMap { it.values }.forEach { packetClass ->
                 val metadata = packetClass.findAnnotation<PacketMetadata>()
                 assertNotNull(metadata, "${packetClass.qualifiedName} is missing PacketMetadata")
 
@@ -170,6 +171,7 @@ private object SamplePacketDecoder : Decoder, CompositeDecoder {
             val value = ProtocolDynamicCodec.sample(
                 ProtocolDynamicCodec.parse(protocolType.json),
                 contextStack.lastOrNull() ?: mutableMapOf(),
+                GeneratedPacketRegistry.protocolResourcePath,
             ).value?.toString() ?: ""
             recordElement(descriptor, index, value)
             return value
@@ -195,6 +197,7 @@ private object SamplePacketDecoder : Decoder, CompositeDecoder {
                 ProtocolDynamicCodec.parse(protocolType.json),
                 deserializer,
                 contextStack.lastOrNull() ?: mutableMapOf(),
+                GeneratedPacketRegistry.protocolResourcePath,
             )
             recordElement(descriptor, index, value)
             return value
@@ -218,6 +221,7 @@ private object SamplePacketDecoder : Decoder, CompositeDecoder {
                 ProtocolDynamicCodec.parse(protocolType.json),
                 deserializer,
                 contextStack.lastOrNull() ?: mutableMapOf(),
+                GeneratedPacketRegistry.protocolResourcePath,
             )
             recordElement(descriptor, index, value)
             return value

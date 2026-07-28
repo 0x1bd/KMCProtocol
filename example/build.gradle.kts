@@ -8,8 +8,6 @@ plugins {
 group = "org.kvxd"
 version = "1.0-SNAPSHOT"
 
-val minecraftDataVersion = providers.gradleProperty("kmcMinecraftVersion")
-
 dependencies {
     implementation(project(":protocol"))
     implementation(libs.bundles.ktor)
@@ -25,8 +23,11 @@ kotlin {
 }
 
 kmcProtocol {
-    minecraftVersion.set(minecraftDataVersion)
+    minecraftVersions.set(
+        providers.gradleProperty("kmcMinecraftVersions").map { it.split(',').map(String::trim) }
+    )
     refreshProtocolData.set(providers.gradleProperty("kmcRefreshProtocolData").map(String::toBoolean).orElse(false))
+    vendoredDataDirectory.set(project(":protocol").layout.projectDirectory.dir("src/main/minecraft-data"))
     runtimePackage.set("org.kvxd.kmcprotocol")
     packetPackage.set("org.kvxd.kmcprotocol.packets.generated")
     registryPackage.set("org.kvxd.kmcprotocol.generated")

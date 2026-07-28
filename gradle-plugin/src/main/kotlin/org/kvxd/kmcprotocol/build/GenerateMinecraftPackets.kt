@@ -2,97 +2,93 @@ package org.kvxd.kmcprotocol.build
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import java.io.File
 
-/**
- * Gradle task that generates Kotlin packet classes from a PrismarineJS protocol.json file.
- */
 @CacheableTask
 abstract class GenerateMinecraftPackets : DefaultTask() {
 
-    /**
-     * protocol.json file used as input.
-     */
-    @get:InputFile
+    @get:InputDirectory
     @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val protocolDataFile: RegularFileProperty
+    abstract val dataDirectory: DirectoryProperty
 
-    /**
-     * Minecraft data version represented by the input protocol file.
-     */
     @get:Input
-    abstract val minecraftVersion: Property<String>
+    abstract val minecraftVersions: ListProperty<String>
 
-    /**
-     * Runtime package containing KMCProtocol core classes.
-     */
     @get:Input
     abstract val runtimePackage: Property<String>
 
-    /**
-     * Package where generated packet classes are written.
-     */
     @get:Input
     abstract val packetPackage: Property<String>
 
-    /**
-     * Package where generated registry helpers are written.
-     */
     @get:Input
     abstract val registryPackage: Property<String>
 
-    /**
-     * Prefix applied to generated serverbound packet classes.
-     */
     @get:Input
     abstract val serverboundPrefix: Property<String>
 
-    /**
-     * Prefix applied to generated clientbound packet classes.
-     */
     @get:Input
     abstract val clientboundPrefix: Property<String>
 
-    /**
-     * Directory where generated Kotlin sources are written.
-     */
     @get:OutputDirectory
     abstract val outputDirectory: DirectoryProperty
 
-    /**
-     * Generates packet sources and registry helpers.
-     */
     @TaskAction
     fun generate() {
-        val protocol = Json.parseToJsonElement(protocolDataFile.get().asFile.readText()).jsonObject
         val output = outputDirectory.get().asFile
-        project.delete(output)
+        output.deleteRecursively()
         output.mkdirs()
 
-        val options = PacketGenerationOptions(
-            minecraftVersion = minecraftVersion.get(),
+        val root = dataDirectory.get().asFile
+        val specs = minecraftVersions.get().map { version -> readSpec(root, version) }
+
+        val reports = MinecraftPacketGenerator(
             runtimePackage = runtimePackage.get(),
             packetPackage = packetPackage.get(),
             registryPackage = registryPackage.get(),
             serverboundPrefix = serverboundPrefix.get(),
             clientboundPrefix = clientboundPrefix.get(),
             outputDirectory = output.toPath(),
-        )
+        ).generate(specs)
 
-        val report = MinecraftPacketGenerator(protocol, options).generate()
-        logger.lifecycle(
-            "Generated ${report.packetCount} packet classes and ${report.supportTypeCount} support types " +
-                "from ${protocolDataFile.get().asFile}"
+        reports.forEach { (spec, report) ->
+            logger.lifecycle(
+                "Generated ${report.packetCount} packets and ${report.supportTypeCount} support types for " +
+                    "Minecraft ${spec.minecraftVersion} (protocol ${spec.protocolVersion})"
+            )
+        }
+    }
+
+    private fun readSpec(root: File, version: String): ProtocolVersionSpec {
+        val protocolJson = root.protocolFile(version)
+        check(protocolJson.isFile) { "Missing protocol.json for Minecraft $version at $protocolJson" }
+
+        val versionJson = root.versionFile(version)
+        check(versionJson.isFile) { "Missing version.json for Minecraft $version at $versionJson" }
+
+        val protocolVersion = Json.parseToJsonElement(versionJson.readText())
+            .jsonObject["version"]
+            ?.jsonPrimitive
+            ?.content
+            ?.toIntOrNull()
+            ?: throw IllegalStateException("version.json for Minecraft $version has no numeric 'version' entry.")
+
+        return ProtocolVersionSpec(
+            minecraftVersion = version,
+            protocolVersion = protocolVersion,
+            protocolResourcePath = "pc/$version/protocol.json",
+            protocolJson = protocolJson.toPath(),
         )
     }
 }

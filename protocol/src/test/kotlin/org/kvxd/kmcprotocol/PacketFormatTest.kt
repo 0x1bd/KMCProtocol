@@ -1,9 +1,9 @@
 package org.kvxd.kmcprotocol
 
-import org.kvxd.kmcprotocol.generated.GeneratedProtocol
+import org.kvxd.kmcprotocol.generated.Protocols
 import io.ktor.utils.io.ByteChannel
 import org.kvxd.kmcprotocol.network.Direction
-import org.kvxd.kmcprotocol.packets.generated.handshake.serverbound.ServerboundSetProtocolPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.handshake.serverbound.ServerboundSetProtocolPacket
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.coroutines.test.runTest
@@ -12,8 +12,8 @@ class PacketFormatTest {
 
     @Test
     fun `compressed packet frames round trip`() = runTest {
-        val sender = GeneratedProtocol.protocolData()
-        val receiver = GeneratedProtocol.protocolData()
+        val sender = Protocols.V1_21_4.protocolData()
+        val receiver = Protocols.V1_21_4.protocolData()
         sender.enableCompression(1)
         receiver.enableCompression(1)
         val packet = ServerboundSetProtocolPacket(769, "localhost", 25565, 1)
@@ -27,8 +27,8 @@ class PacketFormatTest {
 
     @Test
     fun `encrypted packet frames round trip`() = runTest {
-        val sender = GeneratedProtocol.protocolData()
-        val receiver = GeneratedProtocol.protocolData()
+        val sender = Protocols.V1_21_4.protocolData()
+        val receiver = Protocols.V1_21_4.protocolData()
         val sharedSecret = ByteArray(16) { it.toByte() }
         sender.enableEncryption(sharedSecret)
         receiver.enableEncryption(sharedSecret)

@@ -9,37 +9,42 @@ import net.benwoodworth.knbt.NbtCompound
 import net.benwoodworth.knbt.NbtString
 import org.kvxd.kmcprotocol.core.KmcProtocolException
 import org.kvxd.kmcprotocol.core.ProtocolState
-import org.kvxd.kmcprotocol.generated.GeneratedProtocol
+import org.kvxd.kmcprotocol.generated.Protocols
 import org.kvxd.kmcprotocol.network.server.Server
 import org.kvxd.kmcprotocol.network.server.ServerSession
-import org.kvxd.kmcprotocol.packets.generated.configuration.clientbound.ClientboundCommonSelectKnownPacksPacket
-import org.kvxd.kmcprotocol.packets.generated.configuration.clientbound.ClientboundFeatureFlagsPacket
-import org.kvxd.kmcprotocol.packets.generated.configuration.clientbound.ClientboundFinishConfigurationPacket
-import org.kvxd.kmcprotocol.packets.generated.configuration.clientbound.ClientboundRegistryDataPacket
-import org.kvxd.kmcprotocol.packets.generated.configuration.clientbound.ClientboundTagsPacket
-import org.kvxd.kmcprotocol.packets.generated.configuration.serverbound.ServerboundCommonSelectKnownPacksPacket
-import org.kvxd.kmcprotocol.packets.generated.configuration.serverbound.ServerboundFinishConfigurationPacket
-import org.kvxd.kmcprotocol.packets.generated.handshake.serverbound.ServerboundSetProtocolPacket
-import org.kvxd.kmcprotocol.packets.generated.login.clientbound.ClientboundSuccessPacket
-import org.kvxd.kmcprotocol.packets.generated.login.serverbound.ServerboundLoginAcknowledgedPacket
-import org.kvxd.kmcprotocol.packets.generated.login.serverbound.ServerboundLoginStartPacket
-import org.kvxd.kmcprotocol.packets.generated.play.clientbound.ClientboundLoginPacket
-import org.kvxd.kmcprotocol.packets.generated.play.clientbound.ClientboundPositionPacket
-import org.kvxd.kmcprotocol.packets.generated.play.clientbound.ClientboundSystemChatPacket
-import org.kvxd.kmcprotocol.packets.generated.status.clientbound.ClientboundPingPacket
-import org.kvxd.kmcprotocol.packets.generated.status.clientbound.ClientboundServerInfoPacket
-import org.kvxd.kmcprotocol.packets.generated.status.serverbound.ServerboundPingPacket
-import org.kvxd.kmcprotocol.packets.generated.status.serverbound.ServerboundPingStartPacket
-import org.kvxd.kmcprotocol.packets.generated.types.PacksEntry
-import org.kvxd.kmcprotocol.packets.generated.types.WorldState
-import org.kvxd.kmcprotocol.packets.generated.types.WorldStateGamemode
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.clientbound.ClientboundCommonSelectKnownPacksPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.clientbound.ClientboundFeatureFlagsPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.clientbound.ClientboundFinishConfigurationPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.clientbound.ClientboundRegistryDataPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.clientbound.ClientboundTagsPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.serverbound.ServerboundCommonSelectKnownPacksPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.serverbound.ServerboundFinishConfigurationPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.handshake.serverbound.ServerboundSetProtocolPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.clientbound.ClientboundSuccessPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.serverbound.ServerboundLoginAcknowledgedPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.serverbound.ServerboundLoginStartPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.play.clientbound.ClientboundLoginPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.play.clientbound.ClientboundPositionPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.play.clientbound.ClientboundSystemChatPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.status.clientbound.ClientboundPingPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.status.clientbound.ClientboundServerInfoPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.status.serverbound.ServerboundPingPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.status.serverbound.ServerboundPingStartPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.types.SpawnInfo
 
 private const val ProtocolVersion = 769
-private val VanillaKnownPack = PacksEntry("minecraft", "core", "1.21.4")
+private const val VanillaKnownPackNamespace = "minecraft"
+private const val VanillaKnownPackId = "core"
+private const val VanillaKnownPackVersion = "1.21.4"
+private val VanillaKnownPack = ClientboundCommonSelectKnownPacksPacket.Pack(
+    VanillaKnownPackNamespace,
+    VanillaKnownPackId,
+    VanillaKnownPackVersion,
+)
 
 fun main(args: Array<String>) = runBlocking {
     val port = args.getOrNull(0)?.toIntOrNull() ?: 25565
-    val server = Server(InetSocketAddress("0.0.0.0", port)) { GeneratedProtocol.protocolData() }
+    val server = Server(InetSocketAddress("0.0.0.0", port)) { Protocols.V1_21_4.protocolData() }
 
     launch { server.bind() }
     server.awaitBound()
@@ -115,7 +120,7 @@ private suspend fun handleStatus(session: ServerSession) {
 
 private suspend fun handleLogin(session: ServerSession) {
     val start = session.expectPacket<ServerboundLoginStartPacket>("login start")
-    val uuid = UUID.nameUUIDFromBytes("OfflinePlayer:${start.username}".toByteArray(Charsets.UTF_8)).toString()
+    val uuid = UUID.nameUUIDFromBytes("OfflinePlayer:${start.username}".toByteArray(Charsets.UTF_8))
 
     session.send(
         ClientboundSuccessPacket(
@@ -144,7 +149,12 @@ private suspend fun ServerSession.sendConfiguration() {
     send(ClientboundCommonSelectKnownPacksPacket(listOf(VanillaKnownPack)))
 
     val selectedPacks = receiveUntil<ServerboundCommonSelectKnownPacksPacket>()
-    if (VanillaKnownPack !in selectedPacks.packs) {
+    if (selectedPacks.packs.none {
+            it.namespace == VanillaKnownPackNamespace &&
+                it.id == VanillaKnownPackId &&
+                it.version == VanillaKnownPackVersion
+        }
+    ) {
         throw KmcProtocolException(
             """
             Client did not select the vanilla 1.21.4 known pack.
@@ -173,11 +183,11 @@ private suspend fun ServerSession.sendPlayStart() {
             reducedDebugInfo = false,
             enableRespawnScreen = true,
             doLimitedCrafting = false,
-            worldState = WorldState(
+            worldState = SpawnInfo(
                 dimension = 0,
                 name = "minecraft:overworld",
                 hashedSeed = 0L,
-                gamemode = WorldStateGamemode.Creative,
+                gamemode = SpawnInfo.Gamemode.Creative,
                 previousGamemode = 255.toShort(),
                 isDebug = false,
                 isFlat = false,
@@ -199,7 +209,7 @@ private suspend fun ServerSession.sendPlayStart() {
             dz = 0.0,
             yaw = 0.0f,
             pitch = 0.0f,
-            flags = emptyList(),
+            flags = emptySet(),
         )
     )
 }

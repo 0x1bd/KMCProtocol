@@ -3,7 +3,7 @@ package org.kvxd.kmcprotocol.example
 import net.benwoodworth.knbt.NbtCompound
 import net.benwoodworth.knbt.NbtInt
 import net.benwoodworth.knbt.NbtString
-import org.kvxd.kmcprotocol.generated.GeneratedProtocol
+import org.kvxd.kmcprotocol.generated.Protocols
 import io.ktor.utils.io.ByteChannel
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,8 +13,8 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import org.kvxd.kmcprotocol.core.ProtocolState
 import org.kvxd.kmcprotocol.network.Direction
-import org.kvxd.kmcprotocol.packets.generated.configuration.clientbound.ClientboundRegistryDataPacket
-import org.kvxd.kmcprotocol.packets.generated.configuration.clientbound.ClientboundTagsPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.clientbound.ClientboundRegistryDataPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.clientbound.ClientboundTagsPacket
 
 class VanillaRegistryDataTest {
 
@@ -53,13 +53,13 @@ class VanillaRegistryDataTest {
         val enchantments = VanillaRegistryData.registries.toMap().getValue("minecraft:enchantment")
         val packet = ClientboundRegistryDataPacket("minecraft:enchantment", enchantments)
 
-        val sender = GeneratedProtocol.protocolData(ProtocolState.Configuration)
+        val sender = Protocols.V1_21_4.protocolData(ProtocolState.Configuration)
 
         val channel = ByteChannel()
         sender.send(packet, channel)
         channel.close()
 
-        val receiver = GeneratedProtocol.protocolData(ProtocolState.Configuration)
+        val receiver = Protocols.V1_21_4.protocolData(ProtocolState.Configuration)
 
         assertEquals(packet, receiver.receive(channel, Direction.Clientbound))
     }
@@ -68,13 +68,13 @@ class VanillaRegistryDataTest {
     fun `vanilla tags packet round trips`() = runTest {
         val packet = ClientboundTagsPacket(VanillaRegistryData.tags)
 
-        val sender = GeneratedProtocol.protocolData(ProtocolState.Configuration)
+        val sender = Protocols.V1_21_4.protocolData(ProtocolState.Configuration)
 
         val channel = ByteChannel()
         sender.send(packet, channel)
         channel.close()
 
-        val receiver = GeneratedProtocol.protocolData(ProtocolState.Configuration)
+        val receiver = Protocols.V1_21_4.protocolData(ProtocolState.Configuration)
 
         assertEquals(packet, receiver.receive(channel, Direction.Clientbound))
     }

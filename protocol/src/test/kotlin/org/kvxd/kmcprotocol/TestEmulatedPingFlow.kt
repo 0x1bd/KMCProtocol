@@ -1,16 +1,16 @@
 package org.kvxd.kmcprotocol
 
 import org.kvxd.kmcprotocol.core.ProtocolState
-import org.kvxd.kmcprotocol.generated.GeneratedProtocol
+import org.kvxd.kmcprotocol.generated.Protocols
 import org.kvxd.kmcprotocol.network.client.Client
 import org.kvxd.kmcprotocol.network.server.Server
-import org.kvxd.kmcprotocol.packets.generated.configuration.clientbound.ClientboundFinishConfigurationPacket
-import org.kvxd.kmcprotocol.packets.generated.configuration.serverbound.ServerboundFinishConfigurationPacket
-import org.kvxd.kmcprotocol.packets.generated.handshake.serverbound.ServerboundSetProtocolPacket
-import org.kvxd.kmcprotocol.packets.generated.login.clientbound.ClientboundCompressPacket
-import org.kvxd.kmcprotocol.packets.generated.login.serverbound.ServerboundLoginAcknowledgedPacket
-import org.kvxd.kmcprotocol.packets.generated.login.serverbound.ServerboundLoginStartPacket
-import org.kvxd.kmcprotocol.packets.generated.status.serverbound.ServerboundPingStartPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.clientbound.ClientboundFinishConfigurationPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.serverbound.ServerboundFinishConfigurationPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.handshake.serverbound.ServerboundSetProtocolPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.clientbound.ClientboundCompressPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.serverbound.ServerboundLoginAcknowledgedPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.serverbound.ServerboundLoginStartPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.status.serverbound.ServerboundPingStartPacket
 import io.ktor.network.sockets.*
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
@@ -25,7 +25,7 @@ class TestEmulated {
 
     @Test
     fun `emulated status flow`() = runBlocking {
-        val server = Server(InetSocketAddress("127.0.0.1", 0)) { GeneratedProtocol.protocolData() }
+        val server = Server(InetSocketAddress("127.0.0.1", 0)) { Protocols.V1_21_4.protocolData() }
 
         val serverJob = launch {
             server.bind()
@@ -34,7 +34,7 @@ class TestEmulated {
         server.awaitBound()
         val port = (server.localAddress as InetSocketAddress).port
 
-        val client = Client(InetSocketAddress("127.0.0.1", port), GeneratedProtocol.protocolData())
+        val client = Client(InetSocketAddress("127.0.0.1", port), Protocols.V1_21_4.protocolData())
         val session = withTimeout(5_000.milliseconds) { server.accept() }
 
         client.send(ServerboundSetProtocolPacket(769, "localhost", port, 1))
@@ -54,7 +54,7 @@ class TestEmulated {
     @Test
     fun `automatic protocol flow can be disabled`() = runBlocking {
         val server = Server(InetSocketAddress("127.0.0.1", 0)) {
-            GeneratedProtocol.protocolData(automaticProtocolFlow = false)
+            Protocols.V1_21_4.protocolData(automaticProtocolFlow = false)
         }
 
         val serverJob = launch {
@@ -65,7 +65,7 @@ class TestEmulated {
         val port = (server.localAddress as InetSocketAddress).port
         val client = Client(
             InetSocketAddress("127.0.0.1", port),
-            GeneratedProtocol.protocolData(automaticProtocolFlow = false),
+            Protocols.V1_21_4.protocolData(automaticProtocolFlow = false),
         )
         val session = withTimeout(5_000.milliseconds) { server.accept() }
 
@@ -81,7 +81,7 @@ class TestEmulated {
 
     @Test
     fun `emulated login configuration and play flow with compression`() = runBlocking {
-        val server = Server(InetSocketAddress("127.0.0.1", 0)) { GeneratedProtocol.protocolData() }
+        val server = Server(InetSocketAddress("127.0.0.1", 0)) { Protocols.V1_21_4.protocolData() }
 
         val serverJob = launch {
             server.bind()
@@ -89,7 +89,7 @@ class TestEmulated {
 
         server.awaitBound()
         val port = (server.localAddress as InetSocketAddress).port
-        val client = Client(InetSocketAddress("127.0.0.1", port), GeneratedProtocol.protocolData())
+        val client = Client(InetSocketAddress("127.0.0.1", port), Protocols.V1_21_4.protocolData())
 
         val serverSessionJob = launch {
             val session = withTimeout(5_000.milliseconds) { server.accept() }
@@ -110,7 +110,7 @@ class TestEmulated {
         client.send(
             ServerboundLoginStartPacket(
                 username = "KmcProtocol",
-                playerUUID = "00000000-0000-0000-0000-000000000001",
+                playerUUID = java.util.UUID(0L, 1L),
             )
         )
 

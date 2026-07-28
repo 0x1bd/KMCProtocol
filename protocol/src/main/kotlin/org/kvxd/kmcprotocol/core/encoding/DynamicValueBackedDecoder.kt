@@ -10,7 +10,7 @@ import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.modules.SerializersModule
 import net.benwoodworth.knbt.NbtTag
 
-internal class ProtocolValueBackedDecoder(
+internal class DynamicValueBackedDecoder(
     private val value: Any?,
 ) : Decoder, CompositeDecoder {
     override val serializersModule: SerializersModule = EmptySerializersModule()
@@ -89,10 +89,6 @@ internal class ProtocolValueBackedDecoder(
 
     override fun <T> decodeSerializableValue(deserializer: DeserializationStrategy<T>): T {
         val unwrapped = currentValue.unwrap()
-        if (deserializer.descriptor.serialName.endsWith("ProtocolValue")) {
-            @Suppress("UNCHECKED_CAST")
-            return ProtocolValue(unwrapped) as T
-        }
         if (unwrapped is NbtTag && deserializer.descriptor.serialName.startsWith("net.benwoodworth.knbt.")) {
             @Suppress("UNCHECKED_CAST")
             return unwrapped as T
@@ -121,7 +117,7 @@ internal class ProtocolValueBackedDecoder(
     @ExperimentalSerializationApi
     override fun decodeNull(): Nothing? = null
 
-    private fun Any?.unwrap(): Any? = if (this is ProtocolValue) value else this
+    private fun Any?.unwrap(): Any? = if (this is DynamicValue) value else this
 
     private sealed class Frame {
         var index: Int = 0

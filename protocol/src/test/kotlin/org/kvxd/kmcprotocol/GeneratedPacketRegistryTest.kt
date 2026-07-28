@@ -2,8 +2,8 @@ package org.kvxd.kmcprotocol
 
 import org.kvxd.kmcprotocol.core.PacketMetadata
 import org.kvxd.kmcprotocol.core.ProtocolState
-import org.kvxd.kmcprotocol.generated.GeneratedPacketRegistry
-import org.kvxd.kmcprotocol.generated.GeneratedProtocol
+import org.kvxd.kmcprotocol.generated.v1_21_4.GeneratedPacketRegistry
+import org.kvxd.kmcprotocol.generated.Protocols
 import kotlin.reflect.full.findAnnotation
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,10 +13,10 @@ import kotlin.test.assertTrue
 class GeneratedPacketRegistryTest {
 
     @Test
-    fun `all generated packets are registered by metadata`() {
-        val data = GeneratedProtocol.protocolData()
+    fun `all generated packets are registered by metadata`() = Protocols.versions.forEach { version ->
+        val data = version.protocolData()
         val packetsByState = ProtocolState.entries.associateWith { state ->
-            GeneratedPacketRegistry.packetsById(state).values.flatMap { it.values }
+            version.registrySource.packetsById(state).values.flatMap { it.values }
         }
         val allPackets = packetsByState.values.flatten()
 
@@ -49,9 +49,36 @@ class GeneratedPacketRegistryTest {
     }
 
     @Test
-    fun `generated protocol data carries generated protocol resource path`() {
-        val data = GeneratedProtocol.protocolData()
+    fun `catalog exposes every generated version and resolves them by name and protocol number`() {
+        assertTrue(Protocols.versions.isNotEmpty(), "Expected the generated catalog to list versions")
 
-        assertEquals(GeneratedPacketRegistry.protocolResourcePath, data.protocolResourcePath)
+        Protocols.versions.forEach { version ->
+            assertEquals(version, Protocols.requireMinecraftVersion(version.minecraftVersion))
+            assertEquals(
+                version.protocolVersion,
+                Protocols.requireProtocolVersion(version.protocolVersion).protocolVersion,
+            )
+            assertTrue(
+                version in Protocols.allByProtocolVersion(version.protocolVersion),
+                "${version.minecraftVersion} missing from allByProtocolVersion",
+            )
+            assertEquals("pc/${version.minecraftVersion}/protocol.json", version.protocolResourcePath)
+        }
+    }
+
+    @Test
+    fun `each generated version resolves its own protocol type table`() {
+        Protocols.versions.forEach { version ->
+            assertTrue(
+                version.codec.types.aliasCount > 0,
+                "Expected ${version.minecraftVersion} to load protocol.json type aliases",
+            )
+        }
+    }
+
+    @Test
+    fun `generated registry matches its catalog entry`() {
+        assertEquals(GeneratedPacketRegistry.minecraftVersion, Protocols.V1_21_4.minecraftVersion)
+        assertEquals(GeneratedPacketRegistry.protocolVersion, Protocols.V1_21_4.protocolVersion)
     }
 }

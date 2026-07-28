@@ -2,11 +2,11 @@ package org.kvxd.kmcprotocol.conformance
 
 import org.kvxd.kmcprotocol.core.ProtocolState
 import org.kvxd.kmcprotocol.network.client.Client
-import org.kvxd.kmcprotocol.packets.generated.handshake.serverbound.ServerboundSetProtocolPacket
-import org.kvxd.kmcprotocol.packets.generated.login.clientbound.ClientboundCompressPacket
-import org.kvxd.kmcprotocol.packets.generated.login.clientbound.ClientboundSuccessPacket
-import org.kvxd.kmcprotocol.packets.generated.login.serverbound.ServerboundLoginAcknowledgedPacket
-import org.kvxd.kmcprotocol.packets.generated.login.serverbound.ServerboundLoginStartPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.handshake.serverbound.ServerboundSetProtocolPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.clientbound.ClientboundCompressPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.clientbound.ClientboundSuccessPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.serverbound.ServerboundLoginAcknowledgedPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.serverbound.ServerboundLoginStartPacket
 
 internal suspend fun Client.loginToConfiguration(
     host: String,
@@ -16,7 +16,7 @@ internal suspend fun Client.loginToConfiguration(
     send(
         ServerboundLoginStartPacket(
             username = "KmcProtocol",
-            playerUUID = "00000000-0000-0000-0000-000000000001",
+            playerUUID = java.util.UUID(0L, 1L),
         )
     )
 

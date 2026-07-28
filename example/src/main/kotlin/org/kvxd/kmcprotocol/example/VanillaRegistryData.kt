@@ -26,9 +26,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
-import org.kvxd.kmcprotocol.packets.generated.types.EntriesEntry
-import org.kvxd.kmcprotocol.packets.generated.types.TagsEntry
-import org.kvxd.kmcprotocol.packets.generated.types.TagsEntryTagsEntry
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.clientbound.ClientboundRegistryDataPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.clientbound.ClientboundTagsPacket
 
 internal object VanillaRegistryData {
     private const val ResourcePath = "vanilla/1.21.4/synced-registries.json"
@@ -43,20 +42,20 @@ internal object VanillaRegistryData {
         }
     }
 
-    val registries: List<Pair<String, List<EntriesEntry>>> by lazy {
+    val registries: List<Pair<String, List<ClientboundRegistryDataPacket.Entry>>> by lazy {
         root["registries"]!!.jsonObject.map { (registryId, entriesElement) ->
             registryId to entriesElement.jsonObject.map { (entryId, valueElement) ->
-                EntriesEntry(entryId, valueElement.toNbtTag())
+                ClientboundRegistryDataPacket.Entry(entryId, valueElement.toNbtTag())
             }
         }
     }
 
-    val tags: List<TagsEntry> by lazy {
+    val tags: List<ClientboundTagsPacket.Tag> by lazy {
         root["tags"]!!.jsonObject.map { (registryId, tagsElement) ->
-            TagsEntry(
+            ClientboundTagsPacket.Tag(
                 tagType = registryId,
                 tags = tagsElement.jsonObject.map { (tagId, entriesElement) ->
-                    TagsEntryTagsEntry(
+                    ClientboundTagsPacket.Tag.Entry(
                         tagName = tagId,
                         entries = entriesElement.jsonArray.map { it.jsonPrimitive.int },
                     )

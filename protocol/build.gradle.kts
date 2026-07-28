@@ -7,8 +7,6 @@ plugins {
 group = "org.kvxd"
 version = "1.0-SNAPSHOT"
 
-val minecraftDataVersion = providers.gradleProperty("kmcMinecraftVersion")
-
 repositories {
     mavenCentral()
 
@@ -34,10 +32,12 @@ kotlin {
 }
 
 kmcProtocol {
-    minecraftVersion.set(minecraftDataVersion)
+    minecraftVersions.set(
+        providers.gradleProperty("kmcMinecraftVersions").map { it.split(',').map(String::trim) }
+    )
     refreshProtocolData.set(providers.gradleProperty("kmcRefreshProtocolData").map(String::toBoolean).orElse(false))
     sourceSet.set("test")
-    protocolDataFile.set(layout.projectDirectory.file("src/main/minecraft-data/pc/${minecraftDataVersion.get()}/protocol.json"))
+    vendoredDataDirectory.set(layout.projectDirectory.dir("src/main/minecraft-data"))
     runtimePackage.set("org.kvxd.kmcprotocol")
     packetPackage.set("org.kvxd.kmcprotocol.packets.generated")
     registryPackage.set("org.kvxd.kmcprotocol.generated")
@@ -49,7 +49,7 @@ tasks.withType<Test>().configureEach {
     useJUnitPlatform()
 }
 
-val fabricServerTest by tasks.registering(Test::class) {
+tasks.register<Test>("fabricServerTest") {
     group = "verification"
     description = "Runs protocol conformance tests against an automatically launched Fabric server."
 
@@ -60,5 +60,5 @@ val fabricServerTest by tasks.registering(Test::class) {
 
     systemProperty("kmc.fabricServer.enabled", "true")
     systemProperty("kmc.projectDir", rootProject.layout.projectDirectory.asFile.absolutePath)
-    systemProperty("kmc.protocolVersion", providers.gradleProperty("kmcProtocolVersion").get())
+    systemProperty("kmc.protocolVersion", providers.gradleProperty("kmcFabricProtocolVersion").get())
 }

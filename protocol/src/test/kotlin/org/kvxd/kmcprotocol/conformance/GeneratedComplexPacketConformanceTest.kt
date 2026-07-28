@@ -1,29 +1,22 @@
 package org.kvxd.kmcprotocol.conformance
 
-import org.kvxd.kmcprotocol.generated.GeneratedProtocol
+import org.kvxd.kmcprotocol.generated.Protocols
 import io.ktor.utils.io.ByteChannel
 import net.benwoodworth.knbt.NbtCompound
 import net.benwoodworth.knbt.NbtInt
 import net.benwoodworth.knbt.NbtString
 import org.kvxd.kmcprotocol.core.MinecraftPacket
 import org.kvxd.kmcprotocol.core.ProtocolState
-import org.kvxd.kmcprotocol.core.encoding.ProtocolValue
 import org.kvxd.kmcprotocol.network.Direction
-import org.kvxd.kmcprotocol.packets.generated.configuration.clientbound.ClientboundCommonSelectKnownPacksPacket
-import org.kvxd.kmcprotocol.packets.generated.play.clientbound.ClientboundDeclareCommandsPacket
-import org.kvxd.kmcprotocol.packets.generated.play.clientbound.ClientboundDeclareRecipesPacket
-import org.kvxd.kmcprotocol.packets.generated.play.clientbound.ClientboundNbtQueryResponsePacket
-import org.kvxd.kmcprotocol.packets.generated.play.clientbound.ClientboundSystemChatPacket
-import org.kvxd.kmcprotocol.packets.generated.play.clientbound.ClientboundTagsPacket
-import org.kvxd.kmcprotocol.packets.generated.types.NodesEntry
-import org.kvxd.kmcprotocol.packets.generated.types.NodesEntryFlags
-import org.kvxd.kmcprotocol.packets.generated.types.PacksEntry
-import org.kvxd.kmcprotocol.packets.generated.types.StoneCutterRecipesEntry
-import org.kvxd.kmcprotocol.packets.generated.types.StoneCutterRecipesEntryInput
-import org.kvxd.kmcprotocol.packets.generated.types.StoneCutterRecipesEntrySlotDisplay
-import org.kvxd.kmcprotocol.packets.generated.types.StoneCutterRecipesEntrySlotDisplayType
-import org.kvxd.kmcprotocol.packets.generated.types.TagsEntry
-import org.kvxd.kmcprotocol.packets.generated.types.TagsEntryTagsEntry
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.clientbound.ClientboundCommonSelectKnownPacksPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.play.clientbound.ClientboundDeclareCommandsPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.play.clientbound.ClientboundDeclareRecipesPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.play.clientbound.ClientboundNbtQueryResponsePacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.play.clientbound.ClientboundSystemChatPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.play.clientbound.ClientboundTagsPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.types.CommandNode
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.types.IDSet
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.types.SlotDisplay
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.coroutines.test.runTest
@@ -34,8 +27,8 @@ class GeneratedComplexPacketConformanceTest {
     fun `configuration array of generated containers round trips`() = runTest {
         val packet = ClientboundCommonSelectKnownPacksPacket(
             packs = listOf(
-                PacksEntry("minecraft", "core", "1.21.4"),
-                PacksEntry("kmcprotocol", "fixture", "1"),
+                ClientboundCommonSelectKnownPacksPacket.Pack("minecraft", "core", "1.21.4"),
+                ClientboundCommonSelectKnownPacksPacket.Pack("kmcprotocol", "fixture", "1"),
             )
         )
 
@@ -46,11 +39,11 @@ class GeneratedComplexPacketConformanceTest {
     fun `play tags packet with nested arrays round trips`() = runTest {
         val packet = ClientboundTagsPacket(
             tags = listOf(
-                TagsEntry(
+                ClientboundTagsPacket.Tag(
                     tagType = "minecraft:block",
                     tags = listOf(
-                        TagsEntryTagsEntry("minecraft:mineable/pickaxe", listOf(1, 2, 3)),
-                        TagsEntryTagsEntry("minecraft:needs_stone_tool", listOf(4, 5)),
+                        ClientboundTagsPacket.Tag.Entry("minecraft:mineable/pickaxe", listOf(1, 2, 3)),
+                        ClientboundTagsPacket.Tag.Entry("minecraft:needs_stone_tool", listOf(4, 5)),
                     ),
                 )
             )
@@ -94,18 +87,32 @@ class GeneratedComplexPacketConformanceTest {
         val packet = ClientboundDeclareRecipesPacket(
             recipes = emptyList(),
             stoneCutterRecipes = listOf(
-                StoneCutterRecipesEntry(
-                    input = StoneCutterRecipesEntryInput(name = null, ids = listOf(1, 2)),
-                    slotDisplay = StoneCutterRecipesEntrySlotDisplay(
-                        type = StoneCutterRecipesEntrySlotDisplayType.Item,
-                        data = ProtocolValue(5),
+                ClientboundDeclareRecipesPacket.StoneCutterRecipe(
+                    input = IDSet(name = null, ids = listOf(1, 2)),
+                    slotDisplay = SlotDisplay(
+                        type = SlotDisplay.Type.Item,
+                        data = SlotDisplay.Data(
+                            item = 5,
+                            item_stack = null,
+                            tag = null,
+                            smithing_trim = null,
+                            with_remainder = null,
+                            composite = null,
+                        ),
                     ),
                 ),
-                StoneCutterRecipesEntry(
-                    input = StoneCutterRecipesEntryInput(name = "minecraft:stone_tool_materials", ids = null),
-                    slotDisplay = StoneCutterRecipesEntrySlotDisplay(
-                        type = StoneCutterRecipesEntrySlotDisplayType.Tag,
-                        data = ProtocolValue("minecraft:planks"),
+                ClientboundDeclareRecipesPacket.StoneCutterRecipe(
+                    input = IDSet(name = "minecraft:stone_tool_materials", ids = null),
+                    slotDisplay = SlotDisplay(
+                        type = SlotDisplay.Type.Tag,
+                        data = SlotDisplay.Data(
+                            item = null,
+                            item_stack = null,
+                            tag = "minecraft:planks",
+                            smithing_trim = null,
+                            with_remainder = null,
+                            composite = null,
+                        ),
                     ),
                 ),
             ),
@@ -118,8 +125,8 @@ class GeneratedComplexPacketConformanceTest {
     fun `command node switch paths round trip`() = runTest {
         val packet = ClientboundDeclareCommandsPacket(
             nodes = listOf(
-                NodesEntry(
-                    flags = NodesEntryFlags(
+                CommandNode(
+                    flags = CommandNode.Flags(
                         unused = 0,
                         has_custom_suggestions = 0,
                         has_redirect_node = 0,
@@ -127,11 +134,14 @@ class GeneratedComplexPacketConformanceTest {
                         command_node_type = 0,
                     ),
                     children = listOf(1),
-                    redirectNode = ProtocolValue(null),
-                    extraNodeData = ProtocolValue(null),
+                    redirectNode = null,
+                    extraNodeData = CommandNode.ExtraNodeData(
+                        field_1 = null,
+                        field_2 = null,
+                    ),
                 ),
-                NodesEntry(
-                    flags = NodesEntryFlags(
+                CommandNode(
+                    flags = CommandNode.Flags(
                         unused = 0,
                         has_custom_suggestions = 1,
                         has_redirect_node = 1,
@@ -139,14 +149,28 @@ class GeneratedComplexPacketConformanceTest {
                         command_node_type = 2,
                     ),
                     children = emptyList(),
-                    redirectNode = ProtocolValue(0),
-                    extraNodeData = ProtocolValue.obj(
-                        mapOf(
-                            "name" to ProtocolValue("message"),
-                            "parser" to ProtocolValue("brigadier:string"),
-                            "properties" to ProtocolValue("SINGLE_WORD"),
-                            "suggestionType" to ProtocolValue("minecraft:ask_server"),
-                        )
+                    redirectNode = 0,
+                    extraNodeData = CommandNode.ExtraNodeData(
+                        field_1 = null,
+                        field_2 = CommandNode.ExtraNodeData2(
+                            name = "message",
+                            parser = CommandNode.ExtraNodeData2.Parser.BrigadierString,
+                            properties = CommandNode.ExtraNodeData2.Properties(
+                                brigadier_float = null,
+                                brigadier_double = null,
+                                brigadier_integer = null,
+                                brigadier_long = null,
+                                brigadier_string = CommandNode.ExtraNodeData2.PropertiesBrigadierString.SINGLEWORD,
+                                minecraft_entity = null,
+                                minecraft_score_holder = null,
+                                minecraft_time = null,
+                                minecraft_resource_or_tag = null,
+                                minecraft_resource_or_tag_key = null,
+                                minecraft_resource = null,
+                                minecraft_resource_key = null,
+                            ),
+                            suggestionType = "minecraft:ask_server",
+                        ),
                     ),
                 ),
             ),
@@ -161,13 +185,13 @@ class GeneratedComplexPacketConformanceTest {
         state: ProtocolState,
         direction: Direction,
     ): MinecraftPacket? {
-        val data = GeneratedProtocol.protocolData(state)
+        val data = Protocols.V1_21_4.protocolData(state)
 
         val channel = ByteChannel()
         data.send(packet, channel)
         channel.close()
 
-        val receiver = GeneratedProtocol.protocolData(state)
+        val receiver = Protocols.V1_21_4.protocolData(state)
         return receiver.receive(channel, direction)
     }
 }

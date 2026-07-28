@@ -13,18 +13,9 @@ import kotlinx.coroutines.selects.select
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * TCP server that accepts Minecraft packet sessions.
- */
 class Server(
-    /**
-     * Address where the server socket should bind.
-     */
     private val bindAddress: SocketAddress = InetSocketAddress("0.0.0.0", 25565),
 
-    /**
-     * Factory used to create an independent protocol context for each accepted session.
-     */
     private val sessionProtocolData: () -> ProtocolData = { ProtocolData() },
 ) : AutoCloseable {
     private lateinit var socket: ServerSocket
@@ -36,36 +27,21 @@ class Server(
 
     private val acceptedSessions = Channel<ServerSession>(Channel.BUFFERED)
 
-    /**
-     * Stream of accepted sessions.
-     */
     val sessions: ReceiveChannel<ServerSession> = acceptedSessions
 
     private val serverErrors = Channel<Throwable>(Channel.BUFFERED)
 
-    /**
-     * Stream of asynchronous server errors.
-     */
     val errors: ReceiveChannel<Throwable> = serverErrors
 
     private val boundDeferred = CompletableDeferred<Unit>()
 
-    /**
-     * Suspends until the server socket has finished binding.
-     */
     suspend fun awaitBound() {
         boundDeferred.await()
     }
 
-    /**
-     * Address assigned to the bound server socket.
-     */
     val localAddress: SocketAddress
         get() = socket.localAddress
 
-    /**
-     * Binds the server socket and accepts sessions until the server is closed.
-     */
     suspend fun bind() {
         selectorManager = ActorSelectorManager(Dispatchers.IO)
         socket = aSocket(selectorManager)
@@ -99,18 +75,12 @@ class Server(
         }
     }
 
-    /**
-     * Returns the next accepted session or throws the next server error.
-     */
     suspend fun accept(): ServerSession =
         select {
             acceptedSessions.onReceive { it }
             serverErrors.onReceive { throw it }
         }
 
-    /**
-     * Closes the server socket and all active sessions.
-     */
     override fun close() = runBlocking {
         if (!closed.compareAndSet(false, true)) return@runBlocking
 

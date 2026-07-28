@@ -1,8 +1,8 @@
 [versions]
-kotlin = "2.1.0"
-kotlin-coroutines = "1.10.1"
-kotlinx-serialization-json = "1.8.1"
-ktor = "3.1.1"
+kotlin = "2.4.10"
+kotlin-coroutines = "1.11.0"
+kotlinx-serialization-json = "1.11.0"
+ktor = "3.5.1"
 adventure = "4.19.0"
 knbt = "0.11.8"
 minecraft = "1.21.4"
@@ -32,4 +32,4 @@ serialization = ["knbt", "adventure-text-serializer-gson", "kotlinx-serializatio
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlinx-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-fabric-loom = { id = "fabric-loom", version = "1.8.13" }
+fabric-loom = { id = "fabric-loom", version = "1.17.17" }

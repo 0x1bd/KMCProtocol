@@ -4,9 +4,9 @@ plugins {
 }
 
 dependencies {
-    compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0")
-    implementation("com.squareup:kotlinpoet:1.18.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.10")
+    implementation("com.squareup:kotlinpoet:2.3.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 }
 
 gradlePlugin {

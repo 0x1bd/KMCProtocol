@@ -24,6 +24,7 @@ import org.kvxd.kmcprotocol.core.encoding.ProtocolArray
 import org.kvxd.kmcprotocol.core.encoding.ProtocolBinary
 import org.kvxd.kmcprotocol.core.encoding.ProtocolSwitch
 import org.kvxd.kmcprotocol.core.encoding.resolvePath
+import org.kvxd.kmcprotocol.core.encoding.resolvePathOrUnresolved
 import org.kvxd.kmcprotocol.core.encoding.switchBranchPresent
 import org.kvxd.kmcprotocol.core.encoding.ProtocolType
 import org.kvxd.kmcprotocol.core.encoding.getElementAnnotationFromIndex
@@ -300,7 +301,11 @@ internal class SamplePacketDecoder(private val codec: ProtocolCodec) : Decoder, 
         previousValue: T?,
     ): T? {
         descriptor.getElementAnnotationFromIndex<ProtocolSwitch>(index)?.let { switch ->
-            if (!switchBranchPresent(switch, contextStack.resolvePath(switch.compareTo))) {
+            if (!switchBranchPresent(
+                    switch,
+                    contextStack.resolvePathOrUnresolved(switch.compareTo),
+                    "${descriptor.serialName}.${descriptor.getElementName(index)}",
+                )) {
                 recordElement(descriptor, index, null)
                 return null
             }
@@ -332,7 +337,9 @@ internal class SamplePacketDecoder(private val codec: ProtocolCodec) : Decoder, 
             return value
         }
 
-        return decodeSerializableValue(deserializer)
+        val sampled = decodeSerializableValue(deserializer)
+        recordElement(descriptor, index, sampled)
+        return sampled
     }
 
     @ExperimentalSerializationApi
@@ -349,7 +356,9 @@ internal class SamplePacketDecoder(private val codec: ProtocolCodec) : Decoder, 
             BinaryKind.RestBuffer -> ByteArray(0)
             BinaryKind.Buffer -> ByteArray(if (spec.fixedCount >= 0) spec.fixedCount else 0)
             BinaryKind.AnonOptionalNbt, BinaryKind.OptionalNbt, BinaryKind.CompressedNbt -> null
-            BinaryKind.AnonymousNbt, BinaryKind.Nbt -> net.benwoodworth.knbt.NbtCompound(emptyMap())
+            BinaryKind.AnonymousNbt, BinaryKind.Nbt -> net.benwoodworth.knbt.NbtCompound(
+                mapOf("text" to net.benwoodworth.knbt.NbtString("sample"))
+            )
         }
 
     private fun recordElement(descriptor: SerialDescriptor, index: Int, value: Any?) {

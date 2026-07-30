@@ -84,7 +84,14 @@ annotation class ProtocolSwitch(
     val defaultPresent: Boolean,
 )
 
-internal fun switchBranchPresent(spec: ProtocolSwitch, discriminator: Any?): Boolean {
+internal fun switchBranchPresent(spec: ProtocolSwitch, discriminator: Any?, owner: String): Boolean {
+    if (discriminator === UnresolvedProtocolPath) {
+        throw KmcProtocolException(
+            "Cannot resolve the switch discriminator '${spec.compareTo}' for $owner. The path did not " +
+                "match any recorded field, so the branch cannot be selected."
+        )
+    }
+
     val key = switchKey(discriminator)
     return when {
         spec.presentKeys.contains(key) -> true

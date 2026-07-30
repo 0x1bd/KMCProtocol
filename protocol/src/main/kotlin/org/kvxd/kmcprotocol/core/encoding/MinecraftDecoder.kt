@@ -204,7 +204,11 @@ class MinecraftDecoder(
         val binarySpec = descriptor.getElementAnnotationFromIndex<ProtocolBinary>(index)
         val switch = descriptor.getElementAnnotationFromIndex<ProtocolSwitch>(index)
         if (switch != null) {
-            if (!switchBranchPresent(switch, contextStack.resolvePath(switch.compareTo))) {
+            if (!switchBranchPresent(
+                switch,
+                contextStack.resolvePathOrUnresolved(switch.compareTo),
+                "${descriptor.serialName}.${descriptor.getElementName(index)}",
+            )) {
                 recordElement(descriptor, index, null)
                 return null
             }

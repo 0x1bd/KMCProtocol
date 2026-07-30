@@ -173,7 +173,11 @@ class MinecraftEncoder(
         val binary = descriptor.getElementAnnotationFromIndex<ProtocolBinary>(index)
         val switch = descriptor.getElementAnnotationFromIndex<ProtocolSwitch>(index)
         if (switch != null) {
-            val present = switchBranchPresent(switch, contextStack.resolvePath(switch.compareTo))
+            val present = switchBranchPresent(
+                switch,
+                contextStack.resolvePathOrUnresolved(switch.compareTo),
+                "${descriptor.serialName}.${descriptor.getElementName(index)}",
+            )
             if (present && value == null) {
                 throw KmcProtocolException(
                     "Property '${descriptor.getElementName(index)}' of ${descriptor.serialName} is required when " +

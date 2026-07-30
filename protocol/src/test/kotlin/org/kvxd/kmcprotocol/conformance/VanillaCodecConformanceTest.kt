@@ -107,13 +107,19 @@ class VanillaCodecConformanceTest {
                 trailing.isEmpty(),
                 "${trailing.size} packets encoded more bytes than vanilla consumed: ${trailing.take(5)}",
             )
-            val unexpected = mismatches.filterNot { entry ->
-                CanonicalisingPackets.any { entry.startsWith("$it:") }
-            }
-            assertTrue(
-                unexpected.isEmpty(),
-                "${unexpected.size} packets re-encoded differently for reasons other than known vanilla " +
-                    "canonicalisation: ${unexpected.take(5)}",
+            assertBaseline(
+                actual = rejected,
+                baseline = VanillaRejectsSample,
+                baselineName = "VanillaRejectsSample",
+                regression = "Vanilla can no longer decode",
+                improvement = "Vanilla now decodes",
+            )
+            assertBaseline(
+                actual = mismatches,
+                baseline = VanillaCanonicalises,
+                baselineName = "VanillaCanonicalises",
+                regression = "Vanilla re-encoded differently for",
+                improvement = "Vanilla now re-encodes byte-identically for",
             )
         }
     }
@@ -147,11 +153,64 @@ class VanillaCodecConformanceTest {
         const val VanillaProbeChannel = "kmcprotocol:vanilla_probe"
         const val VanillaAckChannel = "kmcprotocol:vanilla_ack"
 
-        val CanonicalisingPackets = setOf(
+        fun assertBaseline(
+            actual: List<String>,
+            baseline: Set<String>,
+            baselineName: String,
+            regression: String,
+            improvement: String,
+        ) {
+            val names = actual.map { it.substringBefore(':') }.toSortedSet()
+
+            val regressed = names - baseline
+            assertTrue(
+                regressed.isEmpty(),
+                "$regression ${regressed.size} packet(s) that were previously fine, which usually means a " +
+                    "codec or codegen defect: $regressed. Details: " +
+                    actual.filter { entry -> regressed.any { entry.startsWith("$it:") } }.take(5),
+            )
+
+            val improved = baseline - names
+            assertTrue(
+                improved.isEmpty(),
+                "$improvement ${improved.size} packet(s) still listed in $baselineName. Remove them so the " +
+                    "baseline keeps shrinking: $improved",
+            )
+        }
+
+        val VanillaCanonicalises = sortedSetOf(
+            "ClientboundActionBarPacket",
+            "ClientboundBossBarPacket",
+            "ClientboundCommonAddResourcePackPacket",
+            "ClientboundDeathCombatEventPacket",
             "ClientboundDisconnectPacket",
+            "ClientboundKickDisconnectPacket",
             "ClientboundMapChunkPacket",
+            "ClientboundMapPacket",
+            "ClientboundOpenWindowPacket",
+            "ClientboundPlayerChatPacket",
+            "ClientboundPlayerlistHeaderPacket",
+            "ClientboundProfilelessChatPacket",
+            "ClientboundScoreboardObjectivePacket",
+            "ClientboundScoreboardScorePacket",
+            "ClientboundServerDataPacket",
+            "ClientboundSetTitleSubtitlePacket",
+            "ClientboundSetTitleTextPacket",
+            "ClientboundSystemChatPacket",
+            "ClientboundTabCompletePacket",
+            "ClientboundTeamsPacket",
             "ClientboundUpdateLightPacket",
             "ServerboundUpdateJigsawBlockPacket",
         )
+
+        val VanillaRejectsSample = sortedSetOf(
+            "ClientboundEntityTeleportPacket",
+            "ClientboundPositionPacket",
+            "ClientboundServerInfoPacket",
+            "ClientboundTileEntityDataPacket",
+            "ServerboundChatSessionUpdatePacket",
+            "ServerboundSetProtocolPacket",
+        )
+
     }
 }

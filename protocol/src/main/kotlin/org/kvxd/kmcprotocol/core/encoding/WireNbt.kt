@@ -33,6 +33,8 @@ internal object NbtType {
 
 internal val EmptyNbtCompound = NbtCompound(emptyMap())
 
+internal val SampleNbtCompound = NbtCompound(mapOf("text" to NbtString("sample")))
+
 internal fun NbtTag.nbtTypeId(): Int =
     when (this) {
         is NbtByte -> NbtType.Byte

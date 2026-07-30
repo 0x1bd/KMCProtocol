@@ -18,15 +18,7 @@ internal class ProtocolScope private constructor(
     }
 
     fun resolve(path: String): Any? {
-        var remaining = path
-        var up = 0
-        while (remaining.startsWith("../")) {
-            up += 1
-            remaining = remaining.removePrefix("../")
-        }
-        remaining = remaining.removePrefix("./")
-
-        val parts = remaining.split('/').filter { it.isNotEmpty() }
+        val (up, parts) = splitProtocolPath(path)
         if (parts.isEmpty()) return null
 
         val head = parts[0]
@@ -36,8 +28,7 @@ internal class ProtocolScope private constructor(
             if (frame.containsKey(head)) {
                 var value: Any? = frame[head].unwrapDynamicValue()
                 for (partIndex in 1 until parts.size) {
-                    val container = value as? Map<*, *> ?: return null
-                    value = container[parts[partIndex]].unwrapDynamicValue()
+                    value = descendProtocolPath(value, parts[partIndex])
                 }
                 return value
             }

@@ -785,15 +785,13 @@ internal class ProtocolTypeResolver(
         if (memberNames.isEmpty()) return emptyList()
 
         val sourceName = memberNames.joinToString("_")
-        val propertyName = memberNames.first() +
-            memberNames.drop(1).joinToString("") { it.replaceFirstChar(Char::uppercase) }
         val resolved = bitfieldType(type, "${ownerHint}${naming.toPascalCase(sourceName)}", namedAlias = false)
         if (resolved.skip) return emptyList()
 
         return listOf(
             PacketField(
-                sourceName,
-                naming.toPropertyName(propertyName),
+                "packed",
+                "packed",
                 if (nullable) resolved.typeName.copy(nullable = true) else resolved.typeName,
                 resolved.numberEncoding,
                 resolved.protocolType,

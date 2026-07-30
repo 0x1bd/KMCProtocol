@@ -4,13 +4,16 @@ import org.kvxd.kmcprotocol.network.Direction
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.serializer
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 
 class PacketRegistry(
     sources: Iterable<PacketRegistrySource> = emptyList(),
 ) {
-    private val packetsById = mutableMapOf<ProtocolState, MutableMap<Direction, MutableMap<Int, RegisteredPacket>>>()
-    private val packetsByClass = mutableMapOf<ProtocolState, MutableMap<KClass<out MinecraftPacket>, RegisteredPacket>>()
+    private val packetsById =
+        ConcurrentHashMap<ProtocolState, ConcurrentHashMap<Direction, ConcurrentHashMap<Int, RegisteredPacket>>>()
+    private val packetsByClass =
+        ConcurrentHashMap<ProtocolState, ConcurrentHashMap<KClass<out MinecraftPacket>, RegisteredPacket>>()
 
     data class RegisteredPacket(
         val id: Int,
@@ -54,8 +57,8 @@ class PacketRegistry(
 
     private fun registerPacket(state: ProtocolState, packet: RegisteredPacket) {
         val existingById = packetsById
-            .getOrPut(state) { mutableMapOf() }
-            .getOrPut(packet.direction) { mutableMapOf() }
+            .getOrPut(state) { ConcurrentHashMap() }
+            .getOrPut(packet.direction) { ConcurrentHashMap() }
             .putIfAbsent(packet.id, packet)
         require(existingById == null) {
             "Duplicate packet id 0x${packet.id.toString(16)} for ${packet.direction} in $state: " +
@@ -63,7 +66,7 @@ class PacketRegistry(
         }
 
         val existingByClass = packetsByClass
-            .getOrPut(state) { mutableMapOf() }
+            .getOrPut(state) { ConcurrentHashMap() }
             .putIfAbsent(packet.packetClass, packet)
         require(existingByClass == null) {
             "Duplicate packet class ${packet.packetClass.qualifiedName} in $state"

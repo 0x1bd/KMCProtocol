@@ -18,7 +18,7 @@ class ProtocolCodec(val types: ProtocolTypeTable) {
         writer: PacketWriter,
         context: MutableMap<String, Any?>,
     ) {
-        DynamicEncoder(types, writer, sampler).encode(type, value.toDynamicValue(), context)
+        DynamicEncoder(types, writer, sampler).encode(type, value.toDynamicValue(), ProtocolScope.root(context))
     }
 
     internal fun <T> decodeAny(
@@ -28,10 +28,11 @@ class ProtocolCodec(val types: ProtocolTypeTable) {
         context: MutableMap<String, Any?>,
     ): T {
         val decoder = DynamicDecoder(types, reader)
+        val scope = ProtocolScope.root(context)
         val value = if (type.usesSwitchPayload(deserializer)) {
-            decoder.decodeSwitchPayload(type.jsonArray.options(), context)
+            decoder.decodeSwitchPayload(type.jsonArray.options(), scope)
         } else {
-            decoder.decode(type, context)
+            decoder.decode(type, scope)
         }
         return value.materialize(deserializer)
     }
@@ -41,19 +42,20 @@ class ProtocolCodec(val types: ProtocolTypeTable) {
         deserializer: DeserializationStrategy<T>,
         context: MutableMap<String, Any?>,
     ): T {
+        val scope = ProtocolScope.root(context)
         val value = if (type.usesSwitchPayload(deserializer)) {
-            sampler.sampleSwitchPayload(type.jsonArray.options(), context)
+            sampler.sampleSwitchPayload(type.jsonArray.options(), scope)
         } else {
-            sampler.sample(type, context)
+            sampler.sample(type, scope)
         }
         return value.materialize(deserializer)
     }
 
     internal fun sampleText(type: JsonElement, context: MutableMap<String, Any?>): String =
-        sampler.sample(type, context).value?.toString() ?: ""
+        sampler.sample(type, ProtocolScope.root(context)).value?.toString() ?: ""
 
     internal fun decodeText(type: JsonElement, reader: PacketReader, context: MutableMap<String, Any?>): String =
-        DynamicDecoder(types, reader).decode(type, context).value?.toString() ?: ""
+        DynamicDecoder(types, reader).decode(type, ProtocolScope.root(context)).value?.toString() ?: ""
 
     @Suppress("UNCHECKED_CAST")
     private fun <T> DynamicValue.materialize(deserializer: DeserializationStrategy<T>): T {

@@ -1,55 +1,37 @@
 package org.kvxd.kmcprotocol.network.client
 
+import io.ktor.network.selector.SelectorManager
+import io.ktor.network.sockets.InetSocketAddress
+import io.ktor.network.sockets.Socket
+import io.ktor.network.sockets.SocketAddress
+import io.ktor.network.sockets.aSocket
 import org.kvxd.kmcprotocol.core.ProtocolData
 import org.kvxd.kmcprotocol.network.Direction
+import org.kvxd.kmcprotocol.network.KmcSelector
 import org.kvxd.kmcprotocol.network.conn.Connection
-import io.ktor.network.selector.*
-import io.ktor.network.sockets.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.runBlocking
 
 class Client private constructor(
     protocol: ProtocolData,
     socket: Socket,
-    private val selectorManager: SelectorManager,
 ) : Connection(
     protocol,
     Direction.Clientbound,
-    socket
+    socket,
 ) {
-    constructor(
-        address: SocketAddress,
-        protocol: ProtocolData = ProtocolData()
-    ) : this(protocol, createSocket(address))
 
-    constructor(
-        host: String,
-        port: Int,
-        protocol: ProtocolData = ProtocolData(),
-    ) : this(InetSocketAddress(host, port), protocol)
+    companion object {
 
-    private constructor(
-        protocol: ProtocolData,
-        clientSocket: ClientSocket,
-    ) : this(protocol, clientSocket.socket, clientSocket.selectorManager)
+        suspend fun connect(
+            address: SocketAddress,
+            protocol: ProtocolData,
+            selectorManager: SelectorManager = KmcSelector.shared,
+        ): Client = Client(protocol, aSocket(selectorManager).tcp().connect(address))
 
-    override fun closeTransportResources() {
-        selectorManager.close()
-    }
-}
-
-private data class ClientSocket(
-    val socket: Socket,
-    val selectorManager: SelectorManager,
-)
-
-private fun createSocket(address: SocketAddress): ClientSocket = runBlocking {
-    val selectorManager = SelectorManager(Dispatchers.IO + SupervisorJob())
-    try {
-        ClientSocket(aSocket(selectorManager).tcp().connect(address), selectorManager)
-    } catch (cause: Throwable) {
-        selectorManager.close()
-        throw cause
+        suspend fun connect(
+            host: String,
+            port: Int,
+            protocol: ProtocolData,
+            selectorManager: SelectorManager = KmcSelector.shared,
+        ): Client = connect(InetSocketAddress(host, port), protocol, selectorManager)
     }
 }

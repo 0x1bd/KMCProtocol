@@ -42,8 +42,8 @@ internal class DynamicValue(
             when (value) {
                 is ByteArray -> value.contentHashCode()
                 is List<*> -> value.fold(1) { acc, item -> 31 * acc + valueHash(item) }
-                is Map<*, *> -> value.entries.fold(1) { acc, entry ->
-                    31 * acc + (entry.key?.hashCode() ?: 0) xor valueHash(entry.value)
+                is Map<*, *> -> value.entries.fold(0) { acc, entry ->
+                    acc + ((entry.key?.hashCode() ?: 0) * 31 xor valueHash(entry.value))
                 }
                 else -> value?.hashCode() ?: 0
             }

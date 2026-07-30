@@ -29,7 +29,7 @@ class VanillaCodecConformanceTest {
 
         FabricServerFixture.withServer { host, port ->
             val version = Protocols.V1_21_4
-            val client = Client(InetSocketAddress(host, port), version.protocolData())
+            val client = Client.connect(InetSocketAddress(host, port), version.protocolData())
             val mismatches = mutableListOf<String>()
             val rejected = mutableListOf<String>()
             val absent = mutableListOf<String>()

@@ -13,7 +13,7 @@ import org.kvxd.kmcprotocol.core.KmcProtocolException
 
 internal class DynamicSampler(private val types: ProtocolTypeTable) {
 
-    fun sample(type: JsonElement, context: MutableMap<String, Any?>): DynamicValue {
+    fun sample(type: JsonElement, context: ProtocolScope): DynamicValue {
         types.resolveAlias(type)?.let { return sample(it, context) }
 
         return when (type) {
@@ -23,12 +23,12 @@ internal class DynamicSampler(private val types: ProtocolTypeTable) {
         }
     }
 
-    fun sampleSwitchPayload(options: JsonObject, context: MutableMap<String, Any?>): DynamicValue {
+    fun sampleSwitchPayload(options: JsonObject, context: ProtocolScope): DynamicValue {
         val selected = types.selectBranch(options, context) ?: return DynamicValue.obj(emptyMap())
         return DynamicValue.obj(mapOf(switchBranchPropertyName(selected.name) to sample(selected.type, context)))
     }
 
-    private fun sampleCompound(type: JsonArray, context: MutableMap<String, Any?>): DynamicValue {
+    private fun sampleCompound(type: JsonArray, context: ProtocolScope): DynamicValue {
         types.instantiate(type)?.let { return sample(it, context) }
         val options = type.options()
 
@@ -65,18 +65,18 @@ internal class DynamicSampler(private val types: ProtocolTypeTable) {
         }
     }
 
-    private fun sampleArrayCount(options: JsonObject, context: Map<String, Any?>): Int {
+    private fun sampleArrayCount(options: JsonObject, context: ProtocolScope): Int {
         val count = options["count"] as? JsonPrimitive ?: return 0
         count.intOrNull?.let { return it }
-        return (context[count.content] as? Number)?.toInt() ?: 0
+        return (context.resolve(count.content) as? Number)?.toInt() ?: 0
     }
 
     private fun sampleContainer(
         fields: List<JsonObject>,
-        parentContext: MutableMap<String, Any?>,
+        parentContext: ProtocolScope,
     ): Map<String, DynamicValue> {
         val values = linkedMapOf<String, DynamicValue>()
-        val localContext = parentContext.toMutableMap()
+        val localContext = parentContext.child()
         for (field in fields) {
             val sampled = sample(field["type"] ?: VoidType, localContext)
             val anonymous = field["anon"]?.jsonPrimitive?.booleanOrNull == true
@@ -88,13 +88,13 @@ internal class DynamicSampler(private val types: ProtocolTypeTable) {
                 localContext.putAll(sampledMap.mapValues { it.value.value })
             } else if (name != null) {
                 values[name] = sampled
-                localContext[name] = sampled.value
+                localContext.put(name, sampled.value)
             }
         }
         return values
     }
 
-    private fun sampleSwitch(options: JsonObject, context: MutableMap<String, Any?>): DynamicValue {
+    private fun sampleSwitch(options: JsonObject, context: ProtocolScope): DynamicValue {
         val selected = types.selectBranch(options, context) ?: return DynamicValue.Null
         if (types.switchUsesPayload(options)) {
             return DynamicValue.obj(mapOf(switchBranchPropertyName(selected.name) to sample(selected.type, context)))

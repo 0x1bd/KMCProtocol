@@ -25,16 +25,11 @@ class TestEmulated {
 
     @Test
     fun `emulated status flow`() = runBlocking {
-        val server = Server(InetSocketAddress("127.0.0.1", 0)) { Protocols.V1_21_4.protocolData() }
+        val server = Server.bind(InetSocketAddress("127.0.0.1", 0)) { Protocols.V1_21_4.protocolData() }
 
-        val serverJob = launch {
-            server.bind()
-        }
-
-        server.awaitBound()
         val port = (server.localAddress as InetSocketAddress).port
 
-        val client = Client(InetSocketAddress("127.0.0.1", port), Protocols.V1_21_4.protocolData())
+        val client = Client.connect(InetSocketAddress("127.0.0.1", port), Protocols.V1_21_4.protocolData())
         val session = withTimeout(5_000.milliseconds) { server.accept() }
 
         client.send(ServerboundSetProtocolPacket(769, "localhost", port, 1))
@@ -48,22 +43,16 @@ class TestEmulated {
 
         client.close()
         server.close()
-        serverJob.cancelAndJoin()
     }
 
     @Test
     fun `automatic protocol flow can be disabled`() = runBlocking {
-        val server = Server(InetSocketAddress("127.0.0.1", 0)) {
+        val server = Server.bind(InetSocketAddress("127.0.0.1", 0)) {
             Protocols.V1_21_4.protocolData(automaticProtocolFlow = false)
         }
 
-        val serverJob = launch {
-            server.bind()
-        }
-
-        server.awaitBound()
         val port = (server.localAddress as InetSocketAddress).port
-        val client = Client(
+        val client = Client.connect(
             InetSocketAddress("127.0.0.1", port),
             Protocols.V1_21_4.protocolData(automaticProtocolFlow = false),
         )
@@ -76,20 +65,14 @@ class TestEmulated {
 
         client.close()
         server.close()
-        serverJob.cancelAndJoin()
     }
 
     @Test
     fun `emulated login configuration and play flow with compression`() = runBlocking {
-        val server = Server(InetSocketAddress("127.0.0.1", 0)) { Protocols.V1_21_4.protocolData() }
+        val server = Server.bind(InetSocketAddress("127.0.0.1", 0)) { Protocols.V1_21_4.protocolData() }
 
-        val serverJob = launch {
-            server.bind()
-        }
-
-        server.awaitBound()
         val port = (server.localAddress as InetSocketAddress).port
-        val client = Client(InetSocketAddress("127.0.0.1", port), Protocols.V1_21_4.protocolData())
+        val client = Client.connect(InetSocketAddress("127.0.0.1", port), Protocols.V1_21_4.protocolData())
 
         val serverSessionJob = launch {
             val session = withTimeout(5_000.milliseconds) { server.accept() }
@@ -127,7 +110,6 @@ class TestEmulated {
 
         client.close()
         server.close()
-        serverJob.cancelAndJoin()
     }
 
 }

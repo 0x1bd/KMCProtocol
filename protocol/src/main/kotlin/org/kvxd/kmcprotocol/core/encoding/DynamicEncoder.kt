@@ -19,7 +19,7 @@ internal class DynamicEncoder(
     private val sampler: DynamicSampler,
 ) {
 
-    fun encode(type: JsonElement, value: DynamicValue, context: MutableMap<String, Any?>) {
+    fun encode(type: JsonElement, value: DynamicValue, context: ProtocolScope) {
         types.resolveAlias(type)?.let { return encode(it, value, context) }
 
         when (type) {
@@ -29,13 +29,13 @@ internal class DynamicEncoder(
         }
     }
 
-    fun encodeSwitchPayload(options: JsonObject, value: DynamicValue, context: MutableMap<String, Any?>) {
+    fun encodeSwitchPayload(options: JsonObject, value: DynamicValue, context: ProtocolScope) {
         val selected = types.selectBranch(options, context) ?: return
         val branchValue = value.asObject()[switchBranchPropertyName(selected.name)] ?: value
         encode(selected.type, branchValue, context)
     }
 
-    private fun encodeCompound(type: JsonArray, value: DynamicValue, context: MutableMap<String, Any?>) {
+    private fun encodeCompound(type: JsonArray, value: DynamicValue, context: ProtocolScope) {
         types.instantiate(type)?.let { return encode(it, value, context) }
         val options = type.options()
 
@@ -77,9 +77,9 @@ internal class DynamicEncoder(
     private fun encodeContainer(
         fields: List<JsonObject>,
         values: Map<String, DynamicValue>,
-        parentContext: MutableMap<String, Any?>,
+        parentContext: ProtocolScope,
     ) {
-        val localContext = parentContext.toMutableMap()
+        val localContext = parentContext.child()
         for (field in fields) {
             val fieldType = field["type"] ?: VoidType
             val name = field["name"]?.jsonPrimitive?.content
@@ -97,7 +97,7 @@ internal class DynamicEncoder(
                 @Suppress("UNCHECKED_CAST")
                 localContext.putAll((fieldValue.value as Map<String, DynamicValue>).mapValues { it.value.value })
             } else if (name != null) {
-                localContext[name] = fieldValue.value
+                localContext.put(name, fieldValue.value)
             }
         }
     }
@@ -116,7 +116,7 @@ internal class DynamicEncoder(
         )
     }
 
-    private fun encodeBitFlags(options: JsonObject, value: DynamicValue, context: MutableMap<String, Any?>) {
+    private fun encodeBitFlags(options: JsonObject, value: DynamicValue, context: ProtocolScope) {
         val flags = options.flagNames()
         val selected = value.asStringList().toSet()
         val mask = flags.foldIndexed(0) { index, acc, flag -> if (flag in selected) acc or (1 shl index) else acc }
@@ -140,7 +140,7 @@ internal class DynamicEncoder(
     private fun encodeTopBitSetArray(
         elementType: JsonElement,
         values: List<DynamicValue>,
-        context: MutableMap<String, Any?>,
+        context: ProtocolScope,
     ) {
         val firstField = (elementType as? JsonArray)?.fields()?.firstOrNull()?.get("name")?.jsonPrimitive?.content
         values.forEachIndexed { index, element ->
@@ -153,7 +153,7 @@ internal class DynamicEncoder(
         }
     }
 
-    private fun encodeEntityMetadataLoop(options: JsonObject, value: DynamicValue, context: MutableMap<String, Any?>) {
+    private fun encodeEntityMetadataLoop(options: JsonObject, value: DynamicValue, context: ProtocolScope) {
         val elementType = options.elementType()
         value.asList().forEach { encode(elementType, it, context) }
         writer.writeByte(options.endValue().toByte())
@@ -162,7 +162,7 @@ internal class DynamicEncoder(
     private fun encodeRegistryEntryHolder(
         options: JsonObject,
         values: Map<String, DynamicValue>,
-        context: MutableMap<String, Any?>,
+        context: ProtocolScope,
     ) {
         val otherwise = options.requiredObject("otherwise")
         val direct = values[otherwise.requiredName()]
@@ -177,7 +177,7 @@ internal class DynamicEncoder(
     private fun encodeRegistryEntryHolderSet(
         options: JsonObject,
         values: Map<String, DynamicValue>,
-        context: MutableMap<String, Any?>,
+        context: ProtocolScope,
     ) {
         val base = options.requiredObject("base")
         val baseValue = values[base.requiredName()]

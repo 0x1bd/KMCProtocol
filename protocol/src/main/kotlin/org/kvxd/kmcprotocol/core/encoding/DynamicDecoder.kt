@@ -16,7 +16,7 @@ internal class DynamicDecoder(
     private val reader: PacketReader,
 ) {
 
-    fun decode(type: JsonElement, context: MutableMap<String, Any?>): DynamicValue {
+    fun decode(type: JsonElement, context: ProtocolScope): DynamicValue {
         types.resolveAlias(type)?.let { return decode(it, context) }
 
         return when (type) {
@@ -26,12 +26,12 @@ internal class DynamicDecoder(
         }
     }
 
-    fun decodeSwitchPayload(options: JsonObject, context: MutableMap<String, Any?>): DynamicValue {
+    fun decodeSwitchPayload(options: JsonObject, context: ProtocolScope): DynamicValue {
         val selected = types.selectBranch(options, context) ?: return DynamicValue.obj(emptyMap())
         return DynamicValue.obj(mapOf(switchBranchPropertyName(selected.name) to decode(selected.type, context)))
     }
 
-    private fun decodeCompound(type: JsonArray, context: MutableMap<String, Any?>): DynamicValue {
+    private fun decodeCompound(type: JsonArray, context: ProtocolScope): DynamicValue {
         types.instantiate(type)?.let { return decode(it, context) }
         val options = type.options()
 
@@ -65,10 +65,10 @@ internal class DynamicDecoder(
 
     private fun decodeContainer(
         fields: List<JsonObject>,
-        parentContext: MutableMap<String, Any?>,
+        parentContext: ProtocolScope,
     ): Map<String, DynamicValue> {
         val values = linkedMapOf<String, DynamicValue>()
-        val localContext = parentContext.toMutableMap()
+        val localContext = parentContext.child()
         for (field in fields) {
             val decoded = decode(field["type"] ?: VoidType, localContext)
             val anonymous = field["anon"]?.jsonPrimitive?.booleanOrNull == true
@@ -80,13 +80,13 @@ internal class DynamicDecoder(
                 localContext.putAll(decodedMap.mapValues { it.value.value })
             } else if (name != null) {
                 values[name] = decoded
-                localContext[name] = decoded.value
+                localContext.put(name, decoded.value)
             }
         }
         return values
     }
 
-    private fun decodeSwitch(options: JsonObject, context: MutableMap<String, Any?>): DynamicValue {
+    private fun decodeSwitch(options: JsonObject, context: ProtocolScope): DynamicValue {
         val selected = types.selectBranch(options, context) ?: return DynamicValue.Null
         if (types.switchUsesPayload(options)) {
             return DynamicValue.obj(mapOf(switchBranchPropertyName(selected.name) to decode(selected.type, context)))
@@ -94,12 +94,12 @@ internal class DynamicDecoder(
         return decode(selected.type, context)
     }
 
-    private fun decodeMapper(options: JsonObject, context: MutableMap<String, Any?>): Any? {
+    private fun decodeMapper(options: JsonObject, context: ProtocolScope): Any? {
         val raw = decode(options.mapperType(), context).value as Number
         return options["mappings"]?.jsonObject?.get(raw.toString())?.jsonPrimitive?.content ?: raw
     }
 
-    private fun decodeBitFlags(options: JsonObject, context: MutableMap<String, Any?>): DynamicValue {
+    private fun decodeBitFlags(options: JsonObject, context: ProtocolScope): DynamicValue {
         val mask = (decode(options.mapperType(), context).value as Number).toInt()
         return DynamicValue(options.flagNames().filterIndexed { index, _ -> mask and (1 shl index) != 0 })
     }
@@ -120,10 +120,17 @@ internal class DynamicDecoder(
         }
     }
 
-    private fun decodeTopBitSetArray(elementType: JsonElement, context: MutableMap<String, Any?>): DynamicValue {
-        val fields = (elementType as? JsonArray)?.fields() ?: return DynamicValue.list(emptyList())
-        val firstField = fields.firstOrNull() ?: return DynamicValue.list(emptyList())
-        if (firstField["type"]?.jsonPrimitive?.content !in setOf("i8", "u8")) return DynamicValue.list(emptyList())
+    private fun decodeTopBitSetArray(elementType: JsonElement, context: ProtocolScope): DynamicValue {
+        val declared = types.containerFieldsOf(elementType)
+            ?: throw KmcProtocolException("topBitSetTerminatedArray element type is not a container: $elementType")
+        val fields = types.flattenAnonymousFields(declared)
+        val firstField = fields.firstOrNull()
+            ?: throw KmcProtocolException("topBitSetTerminatedArray element container has no fields.")
+        if (firstField["type"]?.jsonPrimitive?.content !in setOf("i8", "u8")) {
+            throw KmcProtocolException(
+                "topBitSetTerminatedArray requires a leading i8/u8 field but found ${firstField["type"]}."
+            )
+        }
 
         val firstName = firstField.requiredName()
         val values = mutableListOf<DynamicValue>()
@@ -136,18 +143,17 @@ internal class DynamicDecoder(
         return DynamicValue.list(values)
     }
 
-    private fun decodeEntityMetadataLoop(options: JsonObject, context: MutableMap<String, Any?>): DynamicValue {
+    private fun decodeEntityMetadataLoop(options: JsonObject, context: ProtocolScope): DynamicValue {
         val elementType = options.elementType()
-        val fields = types.containerFieldsOf(elementType) ?: return DynamicValue.list(emptyList())
-        val firstField = fields.firstOrNull() ?: return DynamicValue.list(emptyList())
-        val firstName = firstField["name"]?.jsonPrimitive?.content ?: return DynamicValue.list(emptyList())
         val endValue = options.endValue()
 
         val values = mutableListOf<DynamicValue>()
         while (true) {
-            val firstByte = reader.readByte().toInt() and 0xff
-            if (firstByte == endValue) break
-            values += DynamicValue.obj(decodeLoopEntry(fields, firstName, firstByte, context))
+            if (reader.peekUnsignedByte() == endValue) {
+                reader.readByte()
+                break
+            }
+            values += decode(elementType, context.child())
         }
         return DynamicValue.list(values)
     }
@@ -156,23 +162,23 @@ internal class DynamicDecoder(
         fields: List<JsonObject>,
         firstName: String,
         firstValue: Int,
-        context: MutableMap<String, Any?>,
+        context: ProtocolScope,
     ): Map<String, DynamicValue> {
-        val localContext = context.toMutableMap()
+        val localContext = context.child()
         val values = linkedMapOf(firstName to DynamicValue(firstValue))
-        localContext[firstName] = firstValue
+        localContext.put(firstName, firstValue)
         fields.drop(1).forEach { field ->
             val name = field["name"]?.jsonPrimitive?.content ?: return@forEach
             val decoded = decode(field["type"] ?: VoidType, localContext)
             values[name] = decoded
-            localContext[name] = decoded.value
+            localContext.put(name, decoded.value)
         }
         return values
     }
 
     private fun decodeRegistryEntryHolder(
         options: JsonObject,
-        context: MutableMap<String, Any?>,
+        context: ProtocolScope,
     ): Map<String, DynamicValue> {
         val rawId = reader.readVarInt()
         if (rawId != 0) return linkedMapOf(options.requiredString("baseName") to DynamicValue(rawId - 1))
@@ -183,7 +189,7 @@ internal class DynamicDecoder(
 
     private fun decodeRegistryEntryHolderSet(
         options: JsonObject,
-        context: MutableMap<String, Any?>,
+        context: ProtocolScope,
     ): Map<String, DynamicValue> {
         val tagOrCount = reader.readVarInt()
         if (tagOrCount == 0) {
@@ -193,8 +199,9 @@ internal class DynamicDecoder(
 
         val otherwise = options.requiredObject("otherwise")
         val elementType = otherwise["type"] ?: VarIntType
+        val count = reader.requireElementCount(tagOrCount - 1, 1, "Registry entry holder set")
         return linkedMapOf(
-            otherwise.requiredName() to DynamicValue.list(List(tagOrCount - 1) { decode(elementType, context) })
+            otherwise.requiredName() to DynamicValue.list(List(count) { decode(elementType, context) })
         )
     }
 
@@ -229,17 +236,18 @@ internal class DynamicDecoder(
             else -> throw KmcProtocolException("Unsupported scalar protocol type: $name")
         }
 
-    private fun readArrayCount(options: JsonObject, context: Map<String, Any?>): Int {
+    private fun readArrayCount(options: JsonObject, context: ProtocolScope): Int {
         val count = options["count"]
         if (count is JsonPrimitive) {
-            count.intOrNull?.let { return it }
-            val referenced = context[count.content]
+            count.intOrNull?.let { return reader.requireElementCount(it, 1, "Array") }
+            val referenced = context.resolve(count.content)
             if (referenced != null) {
-                return (referenced as? Number)?.toInt()
+                val resolved = (referenced as? Number)?.toInt()
                     ?: throw KmcProtocolException("Array count field '${count.content}' is not numeric: $referenced")
+                return reader.requireElementCount(resolved, 1, "Array")
             }
         }
-        return readCount(options["countType"])
+        return reader.requireElementCount(readCount(options["countType"]), 1, "Array")
     }
 
     private fun readCount(countType: JsonElement?): Int =

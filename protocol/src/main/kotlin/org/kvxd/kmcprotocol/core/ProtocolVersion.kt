@@ -22,12 +22,14 @@ class ProtocolVersion(
         automaticProtocolFlow: Boolean = true,
         serializersModule: SerializersModule = EmptySerializersModule(),
         registry: PacketRegistry = packetRegistry,
+        limits: ProtocolLimits = ProtocolLimits.Default,
     ): ProtocolData = ProtocolData(
         initialState = initialState,
         automaticProtocolFlow = automaticProtocolFlow,
         codec = codec,
         serializersModule = serializersModule,
         registry = registry,
+        limits = limits,
     )
 
     override fun toString(): String = "ProtocolVersion($minecraftVersion, protocol $protocolVersion)"

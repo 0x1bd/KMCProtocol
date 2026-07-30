@@ -14,8 +14,8 @@ class PacketFormatTest {
     fun `compressed packet frames round trip`() = runTest {
         val sender = Protocols.V1_21_4.protocolData()
         val receiver = Protocols.V1_21_4.protocolData()
-        sender.enableCompression(1)
-        receiver.enableCompression(1)
+        sender.setCompression(1)
+        receiver.setCompression(1)
         val packet = ServerboundSetProtocolPacket(769, "localhost", 25565, 1)
 
         val channel = ByteChannel()

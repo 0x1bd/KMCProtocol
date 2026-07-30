@@ -1,11 +1,14 @@
 package org.kvxd.kmcprotocol.core.encoding
 
 import org.kvxd.kmcprotocol.core.KmcProtocolException
+import org.kvxd.kmcprotocol.core.ProtocolLimits
 import java.util.UUID
+
+private const val MaxBufferSize = Int.MAX_VALUE - 8
 
 class PacketWriter(initialCapacity: Int = 64) {
 
-    private var buffer = ByteArray(initialCapacity.coerceAtLeast(16))
+    private var buffer = ByteArray(initialCapacity.coerceAtLeast(16).coerceAtMost(MaxBufferSize))
     private var length = 0
 
     val size: Int
@@ -111,22 +114,50 @@ class PacketWriter(initialCapacity: Int = 64) {
     fun toByteArray(): ByteArray = buffer.copyOf(length)
 
     private fun ensure(extra: Int) {
-        val required = length + extra
+        if (extra < 0) throw KmcProtocolException("Attempted to write a negative byte count: $extra.")
+
+        val required = length.toLong() + extra
+        if (required > MaxBufferSize) {
+            throw KmcProtocolException("Packet would exceed the maximum encodable size of $MaxBufferSize bytes.")
+        }
         if (required <= buffer.size) return
-        var capacity = buffer.size shl 1
+
+        var capacity = buffer.size.toLong()
         while (capacity < required) capacity = capacity shl 1
-        buffer = buffer.copyOf(capacity)
+        buffer = buffer.copyOf(capacity.coerceAtMost(MaxBufferSize.toLong()).toInt())
     }
 }
 
-class PacketReader(private val buffer: ByteArray, private var position: Int = 0) {
+class PacketReader(
+    private val buffer: ByteArray,
+    private var position: Int = 0,
+    val limits: ProtocolLimits = ProtocolLimits.Default,
+) {
 
     val remaining: Int
         get() = buffer.size - position
 
+    fun requireElementCount(count: Int, minimumBytesPerElement: Int, what: String): Int {
+        if (count < 0) throw KmcProtocolException("$what declares a negative element count: $count.")
+
+        val needed = count.toLong() * minimumBytesPerElement.coerceAtLeast(1)
+        if (needed > remaining) {
+            throw KmcProtocolException(
+                "$what declares $count elements requiring at least $needed bytes, " +
+                    "but only $remaining bytes remain in the packet."
+            )
+        }
+        return count
+    }
+
     fun readByte(): Byte {
         require(1)
         return buffer[position++]
+    }
+
+    fun peekUnsignedByte(): Int {
+        require(1)
+        return buffer[position].toInt() and 0xff
     }
 
     fun readShort(): Short {
@@ -169,6 +200,9 @@ class PacketReader(private val buffer: ByteArray, private var position: Int = 0)
         while (true) {
             if (offset == 35) throw KmcProtocolException("VarInt exceeded 5 bytes.")
             val byte = readByte().toInt()
+            if (offset == 28 && byte and 0x70 != 0) {
+                throw KmcProtocolException("VarInt final byte 0x${byte.toString(16)} sets bits beyond 32.")
+            }
             value = value or ((byte and 0x7f) shl offset)
             if (byte and 0x80 == 0) return value
             offset += 7
@@ -181,6 +215,9 @@ class PacketReader(private val buffer: ByteArray, private var position: Int = 0)
         while (true) {
             if (offset == 70) throw KmcProtocolException("VarLong exceeded 10 bytes.")
             val byte = readByte().toInt()
+            if (offset == 63 && byte and 0x7e != 0) {
+                throw KmcProtocolException("VarLong final byte 0x${byte.toString(16)} sets bits beyond 64.")
+            }
             value = value or ((byte.toLong() and 0x7f) shl offset)
             if (byte and 0x80 == 0) return value
             offset += 7

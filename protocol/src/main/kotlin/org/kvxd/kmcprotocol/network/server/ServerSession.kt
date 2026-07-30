@@ -5,7 +5,7 @@ import org.kvxd.kmcprotocol.network.Direction
 import org.kvxd.kmcprotocol.network.conn.Connection
 import io.ktor.network.sockets.*
 
-class ServerSession(
+class ServerSession internal constructor(
     socket: Socket, data: ProtocolData
 ) : Connection(
     data, Direction.Serverbound, socket

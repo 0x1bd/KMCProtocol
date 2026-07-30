@@ -44,10 +44,8 @@ private val VanillaKnownPack = ClientboundCommonSelectKnownPacksPacket.Pack(
 
 fun main(args: Array<String>) = runBlocking {
     val port = args.getOrNull(0)?.toIntOrNull() ?: 25565
-    val server = Server(InetSocketAddress("0.0.0.0", port)) { Protocols.V1_21_4.protocolData() }
+    val server = Server.bind(InetSocketAddress("0.0.0.0", port)) { Protocols.V1_21_4.protocolData() }
 
-    launch { server.bind() }
-    server.awaitBound()
     println("KMCProtocol play-state chat smoke server listening on 0.0.0.0:$port")
     println("Use Minecraft Java 1.21.4, Direct Connect to 127.0.0.1:$port")
 

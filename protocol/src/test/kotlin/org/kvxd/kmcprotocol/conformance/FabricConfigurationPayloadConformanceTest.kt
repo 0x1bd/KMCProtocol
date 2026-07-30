@@ -31,7 +31,7 @@ class FabricConfigurationPayloadConformanceTest {
         if (!FabricServerFixture.enabled()) return@runBlocking
 
         FabricServerFixture.withServer { host, port ->
-            val client = Client(InetSocketAddress(host, port), Protocols.V1_21_4.protocolData())
+            val client = Client.connect(InetSocketAddress(host, port), Protocols.V1_21_4.protocolData())
             try {
                 client.loginToConfiguration(host, port)
 
@@ -56,7 +56,7 @@ class FabricConfigurationPayloadConformanceTest {
         if (!FabricServerFixture.enabled()) return@runBlocking
 
         FabricServerFixture.withServer { host, port ->
-            val client = Client(InetSocketAddress(host, port), Protocols.V1_21_4.protocolData())
+            val client = Client.connect(InetSocketAddress(host, port), Protocols.V1_21_4.protocolData())
             try {
                 client.loginToConfiguration(host, port)
 

@@ -6,11 +6,14 @@ import io.ktor.utils.io.readByte
 import io.ktor.utils.io.readFully
 import io.ktor.utils.io.writeFully
 import java.io.ByteArrayOutputStream
+import java.util.zip.DataFormatException
 import java.util.zip.Deflater
 import java.util.zip.Inflater
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.kvxd.kmcprotocol.core.KmcPacketDecodeException
 import org.kvxd.kmcprotocol.core.KmcPacketEncodeException
 import org.kvxd.kmcprotocol.core.MinecraftPacket
@@ -22,30 +25,47 @@ import org.kvxd.kmcprotocol.core.encoding.PacketWriter
 import org.kvxd.kmcprotocol.core.format.PacketFormat
 import org.kvxd.kmcprotocol.network.Direction
 
+private const val CompressionDisabled = -1
+
 class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
 
+    private class CipherPair(val encrypt: Cipher, val decrypt: Cipher)
+
     @Volatile
-    private var compressionThreshold: Int? = null
+    private var compressionThreshold: Int = CompressionDisabled
 
-    private var encryptCipher: Cipher? = null
-    private var decryptCipher: Cipher? = null
+    @Volatile
+    private var ciphers: CipherPair? = null
 
-    fun enableCompression(threshold: Int) {
-        compressionThreshold = threshold
+    private val sendMutex = Mutex()
+    private val receiveMutex = Mutex()
+
+    private val decryptInput = ByteArray(1)
+    private val decryptOutput = ByteArray(1)
+
+    val isCompressionEnabled: Boolean
+        get() = compressionThreshold >= 0
+
+    val isEncryptionEnabled: Boolean
+        get() = ciphers != null
+
+    fun setCompression(threshold: Int) {
+        compressionThreshold = if (threshold < 0) CompressionDisabled else threshold
     }
 
     fun disableCompression() {
-        compressionThreshold = null
+        compressionThreshold = CompressionDisabled
     }
 
     fun enableEncryption(sharedSecret: ByteArray) {
-        encryptCipher = createCipher(Cipher.ENCRYPT_MODE, sharedSecret)
-        decryptCipher = createCipher(Cipher.DECRYPT_MODE, sharedSecret)
+        ciphers = CipherPair(
+            createCipher(Cipher.ENCRYPT_MODE, sharedSecret),
+            createCipher(Cipher.DECRYPT_MODE, sharedSecret),
+        )
     }
 
     fun disableEncryption() {
-        encryptCipher = null
-        decryptCipher = null
+        ciphers = null
     }
 
     override suspend fun send(packet: MinecraftPacket, channel: ByteWriteChannel) {
@@ -60,44 +80,74 @@ class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
                 )
             }
 
-        val payload = compressionThreshold?.let { encodeCompressedPayload(packetBytes, it) } ?: packetBytes
+        val threshold = compressionThreshold
+        val payload = if (threshold >= 0) encodeCompressedPayload(packetBytes, threshold) else packetBytes
+
+        if (payload.size > data.limits.maxFrameLength) {
+            throw KmcPacketEncodeException(
+                packet::class,
+                data.state,
+                "Encoded frame is ${payload.size} bytes, exceeding the " +
+                    "${data.limits.maxFrameLength} byte frame limit.",
+            )
+        }
+
         val frame = PacketWriter(payload.size + 5).apply {
             writeVarInt(payload.size)
             writeBytes(payload)
         }.toByteArray()
 
-        channel.writeFully(encryptCipher?.update(frame) ?: frame)
-        channel.flush()
-    }
-
-    override suspend fun receive(channel: ByteReadChannel, expectedDirection: Direction): MinecraftPacket? {
-        var length: Int? = null
-        var packetId: Int? = null
-        try {
-            length = readFrameLength(channel, expectedDirection)
-            val payload = ByteArray(length)
-            if (length > 0) channel.readFully(payload)
-
-            val packetBytes = decryptCipher?.update(payload) ?: payload
-            val decodedPayload = compressionThreshold
-                ?.let { decodeCompressedPayload(packetBytes, expectedDirection, length) }
-                ?: packetBytes
-
-            val reader = PacketReader(decodedPayload)
-            packetId = reader.readVarInt()
-            return decodePacket(reader, packetId, expectedDirection, length)
-        } catch (cause: Throwable) {
-            if (cause is KmcPacketDecodeException) throw cause
-            throw KmcPacketDecodeException(
-                state = data.state,
-                direction = expectedDirection,
-                packetId = packetId,
-                frameLength = length,
-                details = cause.message ?: cause::class.simpleName.orEmpty(),
-                cause = cause,
-            )
+        sendMutex.withLock {
+            channel.writeFully(ciphers?.encrypt?.update(frame) ?: frame)
+            channel.flush()
         }
     }
+
+    override suspend fun receive(channel: ByteReadChannel, expectedDirection: Direction): MinecraftPacket? =
+        receiveMutex.withLock {
+            var length: Int? = null
+            var packetId: Int? = null
+            try {
+                val frameLength = readFrameLength(channel, expectedDirection)
+                length = frameLength
+
+                val payload = ByteArray(frameLength)
+                if (frameLength > 0) channel.readFully(payload)
+
+                val packetBytes = ciphers?.decrypt?.update(payload) ?: payload
+                val threshold = compressionThreshold
+                val decodedPayload = if (threshold >= 0) {
+                    decodeCompressedPayload(packetBytes, expectedDirection, frameLength, threshold)
+                } else {
+                    packetBytes
+                }
+
+                val reader = PacketReader(decodedPayload, limits = data.limits)
+                packetId = reader.readVarInt()
+                val packet = decodePacket(reader, packetId, expectedDirection, frameLength)
+
+                if (reader.remaining > 0) {
+                    throw KmcPacketDecodeException(
+                        state = data.state,
+                        direction = expectedDirection,
+                        packetId = packetId,
+                        frameLength = frameLength,
+                        details = "Packet decoded successfully but left ${reader.remaining} trailing bytes unread.",
+                    )
+                }
+                packet
+            } catch (cause: Throwable) {
+                if (cause is KmcPacketDecodeException) throw cause
+                throw KmcPacketDecodeException(
+                    state = data.state,
+                    direction = expectedDirection,
+                    packetId = packetId,
+                    frameLength = length,
+                    details = cause.message ?: cause::class.simpleName.orEmpty(),
+                    cause = cause,
+                )
+            }
+        }
 
     private fun encodePacket(packet: MinecraftPacket): ByteArray {
         val metadata = data.registry.getPacketMetadata(data.state, packet)
@@ -144,18 +194,63 @@ class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
         return writer.toByteArray()
     }
 
-    private fun decodeCompressedPayload(payload: ByteArray, direction: Direction, frameLength: Int): ByteArray {
-        val reader = PacketReader(payload)
+    private fun decodeCompressedPayload(
+        payload: ByteArray,
+        direction: Direction,
+        frameLength: Int,
+        threshold: Int,
+    ): ByteArray {
+        val reader = PacketReader(payload, limits = data.limits)
         val dataLength = reader.readVarInt()
         val compressedBytes = reader.readRemaining()
 
         if (dataLength == 0) return compressedBytes
+
+        if (data.limits.validateDecompressedSize && dataLength < threshold) {
+            throw KmcPacketDecodeException(
+                data.state,
+                direction,
+                null,
+                frameLength,
+                "Badly compressed packet: declared uncompressed length $dataLength is below the " +
+                    "negotiated compression threshold of $threshold.",
+            )
+        }
+
+        if (dataLength < 0 || dataLength > data.limits.maxUncompressedLength) {
+            throw KmcPacketDecodeException(
+                data.state,
+                direction,
+                null,
+                frameLength,
+                "Compressed packet declares an uncompressed length of $dataLength bytes, which is outside " +
+                    "the permitted range of 1..${data.limits.maxUncompressedLength}.",
+            )
+        }
+
         return inflate(compressedBytes, dataLength, direction, frameLength)
     }
 
     private suspend fun readFrameLength(channel: ByteReadChannel, direction: Direction): Int {
-        decryptCipher ?: return channel.readVarIntFrame(direction)
+        val length = if (ciphers == null) {
+            channel.readVarIntFrame(direction)
+        } else {
+            channel.readEncryptedVarIntFrame(direction)
+        }
 
+        if (length <= 0 || length > data.limits.maxFrameLength) {
+            throw KmcPacketDecodeException(
+                data.state,
+                direction,
+                null,
+                length,
+                "Frame length $length is outside the permitted range of 1..${data.limits.maxFrameLength}.",
+            )
+        }
+        return length
+    }
+
+    private suspend fun ByteReadChannel.readEncryptedVarIntFrame(direction: Direction): Int {
         var offset = 0
         var value = 0
         while (true) {
@@ -164,7 +259,12 @@ class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
                     data.state, direction, null, null, "Encrypted frame length VarInt exceeded 5 bytes.",
                 )
             }
-            val byte = decryptByte(channel.readByte()).toInt()
+            val byte = decryptByte(readByte()).toInt()
+            if (offset == 28 && byte and 0x70 != 0) {
+                throw KmcPacketDecodeException(
+                    data.state, direction, null, null, "Encrypted frame length VarInt overflows 32 bits.",
+                )
+            }
             value = value or ((byte and 0x7f) shl offset)
             if (byte and 0x80 == 0) return value
             offset += 7
@@ -181,57 +281,105 @@ class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
                 )
             }
             val byte = readByte().toInt()
+            if (offset == 28 && byte and 0x70 != 0) {
+                throw KmcPacketDecodeException(
+                    data.state, direction, null, null, "Frame length VarInt overflows 32 bits.",
+                )
+            }
             value = value or ((byte and 0x7f) shl offset)
             if (byte and 0x80 == 0) return value
             offset += 7
         }
     }
 
-    private fun decryptByte(byte: Byte): Byte = decryptCipher!!.update(byteArrayOf(byte))[0]
+    private fun decryptByte(byte: Byte): Byte {
+        val cipher = ciphers?.decrypt ?: return byte
+        decryptInput[0] = byte
+        cipher.update(decryptInput, 0, 1, decryptOutput, 0)
+        return decryptOutput[0]
+    }
 
     private fun deflate(bytes: ByteArray): ByteArray {
         val deflater = Deflater()
-        deflater.setInput(bytes)
-        deflater.finish()
+        try {
+            deflater.setInput(bytes)
+            deflater.finish()
 
-        return ByteArrayOutputStream(bytes.size).use { output ->
+            val output = ByteArrayOutputStream(bytes.size)
             val buffer = ByteArray(8192)
             while (!deflater.finished()) {
                 output.write(buffer, 0, deflater.deflate(buffer))
             }
+            return output.toByteArray()
+        } finally {
             deflater.end()
-            output.toByteArray()
         }
     }
 
     private fun inflate(bytes: ByteArray, expectedLength: Int, direction: Direction, frameLength: Int): ByteArray {
         val inflater = Inflater()
-        inflater.setInput(bytes)
+        try {
+            inflater.setInput(bytes)
 
-        return ByteArrayOutputStream(expectedLength).use { output ->
+            val output = ByteArrayOutputStream(expectedLength)
             val buffer = ByteArray(8192)
+            var total = 0L
             while (!inflater.finished()) {
-                val count = inflater.inflate(buffer)
-                if (count == 0 && inflater.needsInput()) {
-                    throw KmcPacketDecodeException(
-                        data.state,
+                val count = try {
+                    inflater.inflate(buffer)
+                } catch (cause: DataFormatException) {
+                    throw decodeFailure(direction, frameLength, "Malformed compressed packet: ${cause.message}", cause)
+                }
+
+                if (count == 0) {
+                    if (inflater.needsInput()) {
+                        throw decodeFailure(
+                            direction,
+                            frameLength,
+                            "Compressed packet ended before the inflater reached the declared uncompressed length.",
+                        )
+                    }
+                    if (inflater.needsDictionary()) {
+                        throw decodeFailure(
+                            direction,
+                            frameLength,
+                            "Compressed packet requires a preset dictionary, which the protocol does not use.",
+                        )
+                    }
+                }
+
+                total += count
+                if (total > expectedLength) {
+                    throw decodeFailure(
                         direction,
-                        null,
                         frameLength,
-                        "Compressed packet ended before inflater reached the declared uncompressed length.",
+                        "Compressed packet inflated past its declared length of $expectedLength bytes.",
                     )
                 }
                 output.write(buffer, 0, count)
             }
-            inflater.end()
 
             val inflated = output.toByteArray()
-            check(inflated.size == expectedLength) {
-                "Inflated packet length ${inflated.size} did not match declared length $expectedLength"
+            if (inflated.size != expectedLength) {
+                throw decodeFailure(
+                    direction,
+                    frameLength,
+                    "Inflated packet length ${inflated.size} did not match the declared length $expectedLength.",
+                )
             }
-            inflated
+            return inflated
+        } finally {
+            inflater.end()
         }
     }
+
+    private fun decodeFailure(
+        direction: Direction,
+        frameLength: Int,
+        details: String,
+        cause: Throwable? = null,
+    ): KmcPacketDecodeException =
+        KmcPacketDecodeException(data.state, direction, null, frameLength, details, cause)
 
     private fun createCipher(mode: Int, sharedSecret: ByteArray): Cipher =
         Cipher.getInstance("AES/CFB8/NoPadding").apply {

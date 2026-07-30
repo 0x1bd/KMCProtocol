@@ -7,6 +7,7 @@
 /.gradle/
 /protocol/build/
 /example/build/
+/extensions/build/
 /fabric-testmod/.gradle/
 /fabric-testmod/build/
 /fabric-testmod/run/

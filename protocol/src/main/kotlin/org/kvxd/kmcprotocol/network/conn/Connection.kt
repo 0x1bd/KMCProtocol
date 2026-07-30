@@ -1,126 +1,141 @@
 package org.kvxd.kmcprotocol.network.conn
 
+import io.ktor.network.sockets.Socket
+import io.ktor.network.sockets.isClosed
+import io.ktor.network.sockets.openReadChannel
+import io.ktor.network.sockets.openWriteChannel
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.ByteWriteChannel
+import io.ktor.utils.io.cancel
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.io.EOFException
 import org.kvxd.kmcprotocol.core.CompressionSetupPacket
 import org.kvxd.kmcprotocol.core.HandshakeIntentPacket
 import org.kvxd.kmcprotocol.core.KmcConnectionException
-import org.kvxd.kmcprotocol.core.KmcProtocolException
 import org.kvxd.kmcprotocol.core.MinecraftPacket
 import org.kvxd.kmcprotocol.core.ProtocolData
 import org.kvxd.kmcprotocol.core.ProtocolState
 import org.kvxd.kmcprotocol.core.StateTransitionPacket
 import org.kvxd.kmcprotocol.network.Direction
-import io.ktor.network.sockets.*
-import io.ktor.utils.io.*
-import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.selects.select
-import kotlinx.io.EOFException
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.coroutines.CoroutineContext
 
-abstract class Connection(
+abstract class Connection internal constructor(
     val data: ProtocolData,
     private val direction: Direction,
     private val socket: Socket,
-) : CoroutineScope, AutoCloseable {
-    private val connectionJob = SupervisorJob()
+) : AutoCloseable {
 
-    override val coroutineContext: CoroutineContext = Dispatchers.IO + connectionJob
+    private val writeChannel: ByteWriteChannel = socket.openWriteChannel()
+    private val readChannel: ByteReadChannel = socket.openReadChannel()
 
-    private val writeChannel = socket.openWriteChannel()
-    private val readChannel = socket.openReadChannel()
-
-    private val remoteEndpoint = runCatching { socket.remoteAddress.toString() }.getOrDefault("<unavailable>")
-
-    val remoteAddress: String
-        get() = remoteEndpoint
+    private val sendMutex = Mutex()
+    private val receiveMutex = Mutex()
 
     private val closed = AtomicBoolean(false)
+    private val closeHandlers = CopyOnWriteArrayList<() -> Unit>()
 
-    private val incomingPackets = Channel<MinecraftPacket>(Channel.BUFFERED)
-    val incoming: ReceiveChannel<MinecraftPacket> = incomingPackets
+    val remoteAddress: String = runCatching { socket.remoteAddress.toString() }.getOrDefault("<unavailable>")
 
-    private val connectionErrors = Channel<Throwable>(Channel.BUFFERED)
+    val isClosed: Boolean
+        get() = closed.get() || socket.isClosed
 
-    val errors: ReceiveChannel<Throwable> = connectionErrors
-
-    init {
-        launch {
-            while (!socket.isClosed && !writeChannel.isClosedForWrite && !readChannel.isClosedForRead) {
-                try {
-                    val packet = data.receive(readChannel, direction) ?: continue
-                    applyIncomingFlow(packet)
-
-                    incomingPackets.send(packet)
-                } catch (e: Exception) {
-                    when (e) {
-                        is EOFException -> disconnect()
-                        else -> {
-                            connectionErrors.trySend(connectionError("receiving packet", e))
-                            disconnect()
-                        }
-                    }
-                }
-            }
+    val incoming: Flow<MinecraftPacket> = flow {
+        while (true) {
+            val packet = receiveOrNull() ?: break
+            emit(packet)
         }
     }
 
+    fun invokeOnClose(handler: () -> Unit) {
+        if (closed.get()) {
+            handler()
+            return
+        }
+        closeHandlers += handler
+        if (closed.get() && closeHandlers.remove(handler)) handler()
+    }
+
     suspend fun send(packet: MinecraftPacket) {
-        try {
-            data.send(packet, writeChannel)
-            applyOutgoingFlow(packet)
-        } catch (cause: Throwable) {
-            val error = connectionError("sending ${packet::class.qualifiedName}", cause)
-            connectionErrors.trySend(error)
-            throw error
+        sendMutex.withLock {
+            try {
+                data.send(packet, writeChannel)
+            } catch (cause: CancellationException) {
+                throw cause
+            } catch (cause: Throwable) {
+                throw connectionError("sending ${packet::class.qualifiedName}", cause)
+            }
+            applyProtocolFlow(packet)
         }
     }
 
     suspend fun receive(): MinecraftPacket =
-        select {
-            incomingPackets.onReceive { it }
-            connectionErrors.onReceive { throw it }
+        receiveOrNull() ?: throw KmcConnectionException(
+            operation = "receiving packet",
+            endpoint = remoteAddress,
+            state = data.state,
+            direction = direction,
+            details = "The peer closed the connection.",
+        )
+
+    suspend fun receiveOrNull(): MinecraftPacket? =
+        receiveMutex.withLock {
+            var packet: MinecraftPacket? = null
+            while (packet == null) {
+                packet = try {
+                    data.receive(readChannel, direction)
+                } catch (cause: CancellationException) {
+                    throw cause
+                } catch (cause: EOFException) {
+                    return@withLock null
+                } catch (cause: ClosedReceiveChannelException) {
+                    return@withLock null
+                } catch (cause: Throwable) {
+                    if (cause.isEndOfStream()) return@withLock null
+                    throw connectionError("receiving packet", cause)
+                }
+            }
+            applyProtocolFlow(packet)
+            packet
         }
+
+    suspend fun flushAndClose() {
+        if (closed.get()) return
+        runCatching { sendMutex.withLock { writeChannel.flushAndClose() } }
+        close()
+    }
 
     fun disconnect() = close()
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
 
-        closeChannels()
+        runCatching { readChannel.cancel() }
+        runCatching { socket.close() }
+
+        closeHandlers.forEach { handler -> runCatching { handler() } }
+        closeHandlers.clear()
     }
 
-    private fun closeChannels() = runBlocking {
-        try {
-            writeChannel.flushAndClose()
-        } finally {
-            readChannel.cancel()
-            socket.close()
-            closeTransportResources()
-            incomingPackets.close()
-            connectionErrors.close()
-            connectionJob.cancel()
+    private fun Throwable.isEndOfStream(): Boolean {
+        var current: Throwable? = this
+        while (current != null) {
+            if (current is EOFException || current is ClosedReceiveChannelException) return true
+            current = current.cause.takeIf { it !== current }
         }
+        return false
     }
-
-    protected open fun closeTransportResources() {}
 
     private fun connectionError(operation: String, cause: Throwable): Throwable {
         if (cause is KmcConnectionException) return cause
-        if (cause is KmcProtocolException) {
-            return KmcConnectionException(
-                operation = operation,
-                endpoint = remoteEndpoint,
-                state = data.state,
-                direction = direction,
-                details = cause.message ?: cause::class.simpleName.orEmpty(),
-                cause = cause,
-            )
-        }
         return KmcConnectionException(
             operation = operation,
-            endpoint = remoteEndpoint,
+            endpoint = remoteAddress,
             state = data.state,
             direction = direction,
             details = cause.message ?: cause::class.simpleName.orEmpty(),
@@ -128,20 +143,12 @@ abstract class Connection(
         )
     }
 
-    private fun applyIncomingFlow(packet: MinecraftPacket) {
-        if (!data.automaticProtocolFlow) return
-        applyProtocolFlow(packet)
-    }
-
-    private fun applyOutgoingFlow(packet: MinecraftPacket) {
-        if (!data.automaticProtocolFlow) return
-        applyProtocolFlow(packet)
-    }
-
     private fun applyProtocolFlow(packet: MinecraftPacket) {
+        if (!data.automaticProtocolFlow) return
+
         when (packet) {
             is HandshakeIntentPacket -> data.switchTo(nextProtocolState(packet.nextProtocolStateId))
-            is CompressionSetupPacket -> data.enableCompression(packet.compressionThreshold)
+            is CompressionSetupPacket -> data.setCompression(packet.compressionThreshold)
             is StateTransitionPacket -> data.switchTo(packet.targetProtocolState)
         }
     }

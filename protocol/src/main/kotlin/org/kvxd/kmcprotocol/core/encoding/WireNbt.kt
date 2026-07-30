@@ -102,6 +102,13 @@ internal fun PacketWriter.writeCompressedNbtTag(tag: NbtTag?) {
         java.util.zip.GZIPOutputStream(sink).use { it.write(payload) }
     }.toByteArray()
 
+    if (compressed.size > Short.MAX_VALUE) {
+        throw KmcProtocolException(
+            "Compressed NBT is ${compressed.size} bytes, which exceeds the ${Short.MAX_VALUE} byte " +
+                "maximum encodable by its length prefix."
+        )
+    }
+
     writeShort(compressed.size.toShort())
     writeBytes(compressed)
 }
@@ -111,8 +118,26 @@ internal fun PacketReader.readCompressedNbtTag(): NbtTag? {
     if (length < 0) return null
 
     val compressed = readBytes(length)
-    val payload = java.util.zip.GZIPInputStream(compressed.inputStream()).use { it.readBytes() }
-    return PacketReader(payload).readNamedNbtTag()
+    val payload = compressed.gunzip(limits.maxCompressedNbtLength)
+    return PacketReader(payload, limits = limits).readNamedNbtTag()
+}
+
+private fun ByteArray.gunzip(limit: Int): ByteArray {
+    val output = java.io.ByteArrayOutputStream(minOf(limit.toLong(), size * 4L).coerceAtLeast(32L).toInt())
+    java.util.zip.GZIPInputStream(inputStream()).use { input ->
+        val chunk = ByteArray(8192)
+        var total = 0L
+        while (true) {
+            val read = input.read(chunk)
+            if (read < 0) break
+            total += read
+            if (total > limit) {
+                throw KmcProtocolException("Compressed NBT expands beyond the $limit byte limit.")
+            }
+            output.write(chunk, 0, read)
+        }
+    }
+    return output.toByteArray()
 }
 
 internal fun PacketWriter.writeNamedNbtTag(tag: NbtTag) {
@@ -121,69 +146,110 @@ internal fun PacketWriter.writeNamedNbtTag(tag: NbtTag) {
     writeNbtPayload(tag)
 }
 
-internal fun PacketReader.readNamedNbtTag(): NbtTag? {
+internal fun PacketReader.readNamedNbtTag(depth: Int = 0): NbtTag? {
     val type = readByte().toInt() and 0xff
     if (type == NbtType.End) return null
     readNbtString()
-    return readNbtPayload(type)
+    return readNbtPayload(type, depth)
 }
 
-internal fun PacketReader.readNbtTag(): NbtTag? {
+internal fun PacketReader.readNbtTag(depth: Int = 0): NbtTag? {
     val type = readByte().toInt() and 0xff
-    return if (type == NbtType.End) null else readNbtPayload(type)
+    return if (type == NbtType.End) null else readNbtPayload(type, depth)
 }
 
-internal fun PacketReader.readNbtPayload(type: Int): NbtTag =
-    when (type) {
+internal fun PacketReader.readNbtPayload(type: Int, depth: Int = 0): NbtTag {
+    if (depth > limits.maxNbtDepth) {
+        throw KmcProtocolException("NBT nesting exceeded the maximum depth of ${limits.maxNbtDepth}.")
+    }
+
+    return when (type) {
         NbtType.Byte -> NbtByte(readByte())
         NbtType.Short -> NbtShort(readShort())
         NbtType.Int -> NbtInt(readInt())
         NbtType.Long -> NbtLong(readLong())
         NbtType.Float -> NbtFloat(readFloat())
         NbtType.Double -> NbtDouble(readDouble())
-        NbtType.ByteArray -> NbtByteArray(ByteArray(readInt()) { readByte() })
+        NbtType.ByteArray -> NbtByteArray(ByteArray(readNbtCount(1, "NBT byte array")) { readByte() })
         NbtType.String -> NbtString(readNbtString())
-        NbtType.List -> readNbtList()
-        NbtType.Compound -> readNbtCompound()
-        NbtType.IntArray -> NbtIntArray(IntArray(readInt()) { readInt() })
-        NbtType.LongArray -> NbtLongArray(LongArray(readInt()) { readLong() })
+        NbtType.List -> readNbtList(depth + 1)
+        NbtType.Compound -> readNbtCompound(depth + 1)
+        NbtType.IntArray -> NbtIntArray(IntArray(readNbtCount(4, "NBT int array")) { readInt() })
+        NbtType.LongArray -> NbtLongArray(LongArray(readNbtCount(8, "NBT long array")) { readLong() })
         else -> throw KmcProtocolException("Unsupported NBT tag type id: $type.")
     }
-
-private fun PacketReader.readNbtList(): NbtList<*> {
-    val elementType = readByte().toInt() and 0xff
-    val count = readInt()
-    return List(count) { readNbtPayload(elementType) }.toNbtList(elementType)
 }
 
-private fun PacketReader.readNbtCompound(): NbtCompound {
+private fun PacketReader.readNbtCount(minimumBytesPerElement: Int, what: String): Int =
+    requireElementCount(readInt(), minimumBytesPerElement, what)
+
+private fun nbtMinimumPayloadSize(elementType: Int): Int =
+    when (elementType) {
+        NbtType.Byte -> 1
+        NbtType.Short -> 2
+        NbtType.Int, NbtType.Float, NbtType.ByteArray, NbtType.IntArray, NbtType.LongArray -> 4
+        NbtType.Long, NbtType.Double -> 8
+        NbtType.String -> 2
+        NbtType.List -> 5
+        else -> 1
+    }
+
+private fun PacketReader.readNbtList(depth: Int): NbtList<*> {
+    val elementType = readByte().toInt() and 0xff
+    val declaredCount = readInt()
+
+    if (elementType == NbtType.End) {
+        if (declaredCount != 0) {
+            throw KmcProtocolException("NBT list declares element type END but contains $declaredCount elements.")
+        }
+        return NbtList(emptyList<NbtByte>())
+    }
+
+    val count = requireElementCount(declaredCount, nbtMinimumPayloadSize(elementType), "NBT list")
+    return List(count) { readNbtPayload(elementType, depth) }.toNbtList(elementType)
+}
+
+private fun PacketReader.readNbtCompound(depth: Int): NbtCompound {
     val values = linkedMapOf<String, NbtTag>()
     while (true) {
         val type = readByte().toInt() and 0xff
         if (type == NbtType.End) return NbtCompound(values)
-        values[readNbtString()] = readNbtPayload(type)
+        values[readNbtString()] = readNbtPayload(type, depth)
     }
 }
 
+private inline fun <reified T : NbtTag> List<NbtTag>.nbtElements(elementType: Int): List<T> =
+    map { tag ->
+        tag as? T ?: throw KmcProtocolException(
+            "NBT list declares element type $elementType but contained a ${tag::class.simpleName}."
+        )
+    }
+
 private fun List<NbtTag>.toNbtList(elementType: Int): NbtList<*> =
     when (elementType) {
-        NbtType.Byte, NbtType.End -> NbtList(filterIsInstance<NbtByte>())
-        NbtType.Short -> NbtList(filterIsInstance<NbtShort>())
-        NbtType.Int -> NbtList(filterIsInstance<NbtInt>())
-        NbtType.Long -> NbtList(filterIsInstance<NbtLong>())
-        NbtType.Float -> NbtList(filterIsInstance<NbtFloat>())
-        NbtType.Double -> NbtList(filterIsInstance<NbtDouble>())
-        NbtType.ByteArray -> NbtList(filterIsInstance<NbtByteArray>())
-        NbtType.String -> NbtList(filterIsInstance<NbtString>())
-        NbtType.List -> NbtList(filterIsInstance<NbtList<*>>())
-        NbtType.Compound -> NbtList(filterIsInstance<NbtCompound>())
-        NbtType.IntArray -> NbtList(filterIsInstance<NbtIntArray>())
-        NbtType.LongArray -> NbtList(filterIsInstance<NbtLongArray>())
+        NbtType.Byte -> NbtList(nbtElements<NbtByte>(elementType))
+        NbtType.Short -> NbtList(nbtElements<NbtShort>(elementType))
+        NbtType.Int -> NbtList(nbtElements<NbtInt>(elementType))
+        NbtType.Long -> NbtList(nbtElements<NbtLong>(elementType))
+        NbtType.Float -> NbtList(nbtElements<NbtFloat>(elementType))
+        NbtType.Double -> NbtList(nbtElements<NbtDouble>(elementType))
+        NbtType.ByteArray -> NbtList(nbtElements<NbtByteArray>(elementType))
+        NbtType.String -> NbtList(nbtElements<NbtString>(elementType))
+        NbtType.List -> NbtList(nbtElements<NbtList<*>>(elementType))
+        NbtType.Compound -> NbtList(nbtElements<NbtCompound>(elementType))
+        NbtType.IntArray -> NbtList(nbtElements<NbtIntArray>(elementType))
+        NbtType.LongArray -> NbtList(nbtElements<NbtLongArray>(elementType))
         else -> throw KmcProtocolException("Unsupported NBT list element type id: $elementType.")
     }
 
 internal fun PacketWriter.writeNbtString(value: String) {
     val bytes = value.toByteArray(Charsets.UTF_8)
+    if (bytes.size > 0xFFFF) {
+        throw KmcProtocolException(
+            "NBT string is ${bytes.size} bytes, which exceeds the 65535 byte maximum encodable " +
+                "by its length prefix."
+        )
+    }
     writeShort(bytes.size.toShort())
     writeBytes(bytes)
 }

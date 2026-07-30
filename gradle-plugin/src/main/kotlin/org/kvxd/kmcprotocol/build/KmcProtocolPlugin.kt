@@ -45,6 +45,10 @@ abstract class KmcProtocolExtension @Inject constructor(objects: ObjectFactory) 
 
     abstract val outputDirectory: DirectoryProperty
 
+    abstract val addRuntimeDependency: Property<Boolean>
+
+    abstract val runtimeVersion: Property<String>
+
     val testServer: KmcProtocolTestServerExtension = objects.newInstance(KmcProtocolTestServerExtension::class.java)
 
     fun versions(vararg versions: String) {
@@ -146,6 +150,8 @@ class KmcProtocolPlugin : Plugin<Project> {
         extension.clientboundPrefix.convention("Clientbound")
         extension.sourceSet.convention("main")
         extension.outputDirectory.convention(project.layout.buildDirectory.dir("generated/sources/kmcPackets/kotlin"))
+        extension.addRuntimeDependency.convention(true)
+        extension.runtimeVersion.convention(KmcProtocolRuntimeVersion)
 
         val protocolResourceDirectory = project.layout.buildDirectory.dir("generated/resources/kmcProtocol")
 
@@ -196,6 +202,22 @@ class KmcProtocolPlugin : Plugin<Project> {
 
         project.afterEvaluate {
             val sourceSetName = extension.sourceSet.get()
+
+            if (extension.addRuntimeDependency.get()) {
+                project.dependencies.add(
+                    sourceSetName.configurationName("implementation"),
+                    "org.kvxd:kmcprotocol:${extension.runtimeVersion.get()}",
+                )
+            }
+
+            project.pluginManager.withPlugin("org.jetbrains.kotlin.jvm") {
+                check(project.pluginManager.hasPlugin(SerializationPluginId)) {
+                    "The $SerializationPluginId plugin is required, because generated packets are " +
+                        "@Serializable classes. Add it alongside org.kvxd.kmcprotocol:\n" +
+                        "    plugins { kotlin(\"plugin.serialization\") version \"<kotlin version>\" }"
+                }
+            }
+
             project.pluginManager.withPlugin("org.jetbrains.kotlin.jvm") {
                 project.extensions.getByType<KotlinJvmProjectExtension>().sourceSets.named(sourceSetName) {
                     kotlin.srcDir(extension.outputDirectory)
@@ -246,7 +268,11 @@ class KmcProtocolPlugin : Plugin<Project> {
     private fun String.taskName(prefix: String, suffix: String): String =
         if (this == "main") "$prefix$suffix" else "$prefix${replaceFirstChar { it.uppercase() }}$suffix"
 
+    private fun String.configurationName(suffix: String): String =
+        if (this == "main") suffix else "$this${suffix.replaceFirstChar { it.uppercase() }}"
+
     private companion object {
         const val DefaultDataBaseUrl = "https://raw.githubusercontent.com/PrismarineJS/minecraft-data/master/data"
+        const val SerializationPluginId = "org.jetbrains.kotlin.plugin.serialization"
     }
 }

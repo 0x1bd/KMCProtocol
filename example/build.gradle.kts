@@ -27,6 +27,7 @@ kmcProtocol {
         providers.gradleProperty("kmcMinecraftVersions").map { it.split(',').map(String::trim) }
     )
     refreshProtocolData.set(providers.gradleProperty("kmcRefreshProtocolData").map(String::toBoolean).orElse(false))
+    addRuntimeDependency.set(false)
     vendoredDataDirectory.set(project(":protocol").layout.projectDirectory.dir("src/main/minecraft-data"))
     runtimePackage.set("org.kvxd.kmcprotocol")
     packetPackage.set("org.kvxd.kmcprotocol.packets.generated")

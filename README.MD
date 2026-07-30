@@ -30,15 +30,23 @@ Apply the plugin in a Kotlin/JVM project and list the versions you want:
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("org.kvxd.kmcprotocol")
-}
-
-dependencies {
-    implementation("org.kvxd:kmcprotocol:<version>")
+    kotlin("plugin.serialization")
+    id("org.kvxd.kmcprotocol") version "<version>"
 }
 
 kmcProtocol {
     versions("1.8", "1.12.2", "1.20.4", "1.21.4")
+}
+```
+
+The plugin adds the matching `org.kvxd:kmcprotocol` runtime.
+
+To pin the runtime yourself, or to supply it another way:
+
+```kotlin
+kmcProtocol {
+    runtimeVersion.set("0.1.0")     // defaults to the plugin's own version
+    addRuntimeDependency.set(false) // opt out entirely
 }
 ```
 
@@ -103,6 +111,8 @@ Both `Client` and `Server` share one `SelectorManager` by default; pass your own
 | `refreshProtocolData`                     | `false`                            | Re-download data even when cached                  |
 | `dataDirectory`                           | `build/kmcProtocol/minecraft-data` | Where downloaded data lands                        |
 | `vendoredDataDirectory`                   | unset                              | Checked before downloading, for offline builds     |
+| `addRuntimeDependency`                    | `true`                             | Add `org.kvxd:kmcprotocol` to the source set       |
+| `runtimeVersion`                          | the plugin's own version           | Runtime version to depend on                       |
 | `sourceSet`                               | `main`                             | Source set receiving generated code                |
 | `packetPackage` / `registryPackage`       | `org.kvxd.kmcprotocol.*`           | Generated package roots                            |
 | `serverboundPrefix` / `clientboundPrefix` | `Serverbound` / `Clientbound`      | Generated class prefixes                           |

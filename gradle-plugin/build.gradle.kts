@@ -21,6 +21,30 @@ kotlin {
     jvmToolchain(21)
 }
 
+val generateRuntimeVersion by tasks.registering {
+    val outputDir = layout.buildDirectory.dir("generated/kmcVersion/kotlin")
+    val runtimeVersion = version.toString()
+
+    inputs.property("runtimeVersion", runtimeVersion)
+    outputs.dir(outputDir)
+
+    doLast {
+        val packageDir = outputDir.get().asFile.resolve("org/kvxd/kmcprotocol/build")
+        packageDir.mkdirs()
+        packageDir.resolve("KmcProtocolRuntime.kt").writeText(
+            """
+            package org.kvxd.kmcprotocol.build
+
+            internal const val KmcProtocolRuntimeVersion: String = "$runtimeVersion"
+            """.trimIndent() + "\n"
+        )
+    }
+}
+
+sourceSets.main {
+    kotlin.srcDir(generateRuntimeVersion)
+}
+
 gradlePlugin {
     website.set("https://github.com/0x1bd/KMCProtocol/")
     vcsUrl.set("https://github.com/0x1bd/KMCProtocol.git")

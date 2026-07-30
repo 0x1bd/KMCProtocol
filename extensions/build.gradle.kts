@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "org.kvxd"
-version = "0.1.0"
+version = libs.versions.kmcprotocol.get()
 
 repositories {
     mavenCentral()

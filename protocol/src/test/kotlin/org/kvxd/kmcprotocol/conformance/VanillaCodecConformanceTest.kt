@@ -149,6 +149,7 @@ class VanillaCodecConformanceTest {
 
         val CanonicalisingPackets = setOf(
             "ClientboundDisconnectPacket",
+            "ClientboundMapChunkPacket",
             "ClientboundUpdateLightPacket",
             "ServerboundUpdateJigsawBlockPacket",
         )

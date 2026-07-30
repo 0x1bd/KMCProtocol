@@ -759,15 +759,52 @@ internal class ProtocolTypeResolver(
     ): List<PacketField> {
         val expanded = expandAlias(type, aliases)
         val typeArray = expanded as? JsonArray ?: return emptyList()
-        return when (typeArray.getOrNull(0)?.jsonPrimitive?.content) {
+        return when (val kind = typeArray.getOrNull(0)?.jsonPrimitive?.content) {
             "container" -> containerFields(typeArray, aliases, ownerHint, nullable)
             "switch" -> {
                 val options = typeArray.getOrNull(1) as? JsonObject ?: return emptyList()
                 val branchTypes = options["fields"]?.jsonObject?.values.orEmpty() + listOfNotNull(options["default"])
                 branchTypes.flatMap { anonymousFields(it, aliases, ownerHint, nullable = true) }
             }
-            else -> emptyList()
+            "bitfield" -> anonymousBitfieldField(typeArray, ownerHint, nullable)
+            else -> throw IllegalStateException(
+                "Anonymous field of type '$kind' in $ownerHint cannot be flattened into its container. " +
+                    "It would be dropped from the generated packet and desynchronise decoding. Type: $expanded"
+            )
         }
+    }
+
+    private fun anonymousBitfieldField(
+        type: JsonArray,
+        ownerHint: String,
+        nullable: Boolean,
+    ): List<PacketField> {
+        val memberNames = type.getOrNull(1)?.jsonArray.orEmpty().mapNotNull {
+            it.jsonObject["name"]?.jsonPrimitive?.safeContentOrNull
+        }
+        if (memberNames.isEmpty()) return emptyList()
+
+        val sourceName = memberNames.joinToString("_")
+        val propertyName = memberNames.first() +
+            memberNames.drop(1).joinToString("") { it.replaceFirstChar(Char::uppercase) }
+        val resolved = bitfieldType(type, "${ownerHint}${naming.toPascalCase(sourceName)}", namedAlias = false)
+        if (resolved.skip) return emptyList()
+
+        return listOf(
+            PacketField(
+                sourceName,
+                naming.toPropertyName(propertyName),
+                if (nullable) resolved.typeName.copy(nullable = true) else resolved.typeName,
+                resolved.numberEncoding,
+                resolved.protocolType,
+                resolved.serializer,
+                resolved.arrayInfo,
+                resolved.binary,
+                resolved.option,
+                resolved.flagsEncoding,
+                resolved.switch,
+            )
+        )
     }
 
     private fun expandAlias(type: JsonElement, aliases: JsonObject, seen: MutableSet<String> = mutableSetOf()): JsonElement {

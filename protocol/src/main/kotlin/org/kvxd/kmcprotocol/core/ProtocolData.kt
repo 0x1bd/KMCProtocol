@@ -7,6 +7,7 @@ import kotlinx.serialization.modules.SerializersModule
 import org.kvxd.kmcprotocol.core.encoding.NbtFormat
 import org.kvxd.kmcprotocol.core.encoding.ProtocolCodec
 import org.kvxd.kmcprotocol.core.format.impl.MinecraftPacketFormat
+import org.kvxd.kmcprotocol.core.format.impl.RawPacketFrame
 import org.kvxd.kmcprotocol.network.Direction
 
 class ProtocolData(
@@ -57,4 +58,26 @@ class ProtocolData(
 
     suspend fun receive(channel: ByteReadChannel, expectedDirection: Direction): MinecraftPacket? =
         packetFormat.receive(channel, expectedDirection)
+
+    internal fun encodePacketBytes(packet: MinecraftPacket): ByteArray =
+        packetFormat.encodePacketBytes(packet)
+
+    internal suspend fun sendPacketBytes(
+        packetBytes: ByteArray,
+        channel: ByteWriteChannel,
+        sourcePacket: MinecraftPacket,
+    ) {
+        packetFormat.sendPacketBytes(packetBytes, channel, sourcePacket::class)
+    }
+
+    internal suspend fun receivePacketBytes(
+        channel: ByteReadChannel,
+        expectedDirection: Direction,
+    ): RawPacketFrame = packetFormat.receivePacketBytes(channel, expectedDirection)
+
+    internal fun decodePacketBytes(
+        packetBytes: ByteArray,
+        expectedDirection: Direction,
+        frameLength: Int? = null,
+    ): MinecraftPacket = packetFormat.decodePacketBytes(packetBytes, expectedDirection, frameLength)
 }

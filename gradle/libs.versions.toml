@@ -1,5 +1,5 @@
 [versions]
-kmcprotocol = "0.2.0"
+kmcprotocol = "0.2.1"
 kotlin = "2.4.10"
 kotlin-coroutines = "1.11.0"
 kotlinx-serialization-json = "1.11.0"

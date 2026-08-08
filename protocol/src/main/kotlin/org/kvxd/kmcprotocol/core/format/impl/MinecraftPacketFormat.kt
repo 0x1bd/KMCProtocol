@@ -12,6 +12,7 @@ import java.util.zip.Inflater
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import kotlin.reflect.KClass
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.kvxd.kmcprotocol.core.KmcPacketDecodeException
@@ -26,6 +27,8 @@ import org.kvxd.kmcprotocol.core.format.PacketFormat
 import org.kvxd.kmcprotocol.network.Direction
 
 private const val CompressionDisabled = -1
+
+internal data class RawPacketFrame(val bytes: ByteArray, val frameLength: Int)
 
 class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
 
@@ -69,26 +72,51 @@ class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
     }
 
     override suspend fun send(packet: MinecraftPacket, channel: ByteWriteChannel) {
-        val packetBytes = runCatching { encodePacket(packet) }
-            .getOrElse { cause ->
-                if (cause is KmcPacketEncodeException) throw cause
-                throw KmcPacketEncodeException(
-                    packet::class,
-                    data.state,
-                    cause.message ?: cause::class.simpleName.orEmpty(),
-                    cause,
-                )
-            }
+        sendPacketBytes(encodePacketBytes(packet), channel, packet::class)
+    }
 
+    override suspend fun receive(channel: ByteReadChannel, expectedDirection: Direction): MinecraftPacket? {
+        val frame = receivePacketBytes(channel, expectedDirection)
+        return decodePacketBytes(frame.bytes, expectedDirection, frame.frameLength)
+    }
+
+    internal fun encodePacketBytes(packet: MinecraftPacket): ByteArray =
+        runCatching {
+            val metadata = data.registry.getPacketMetadata(data.state, packet)
+                ?: throw KmcPacketEncodeException(
+                    packetClass = packet::class,
+                    state = data.state,
+                    details = "No packet registration exists for this packet class in state ${data.state}.",
+                )
+
+            PacketWriter(nbt = data.nbtFormat).apply {
+                writeVarInt(metadata.id)
+                metadata.serializer.serialize(MinecraftEncoder(this, data.codec, data.serializersModule), packet)
+            }.toByteArray()
+        }.getOrElse { cause ->
+            if (cause is KmcPacketEncodeException) throw cause
+            throw KmcPacketEncodeException(
+                packet::class,
+                data.state,
+                cause.message ?: cause::class.simpleName.orEmpty(),
+                cause,
+            )
+        }
+
+    internal suspend fun sendPacketBytes(
+        packetBytes: ByteArray,
+        channel: ByteWriteChannel,
+        sourcePacketClass: KClass<out MinecraftPacket>,
+    ) {
         val threshold = compressionThreshold
         val payload = if (threshold >= 0) encodeCompressedPayload(packetBytes, threshold) else packetBytes
 
         if (payload.size > data.limits.maxFrameLength) {
             throw KmcPacketEncodeException(
-                packet::class,
+                sourcePacketClass,
                 data.state,
                 "Encoded frame is ${payload.size} bytes, exceeding the " +
-                    "${data.limits.maxFrameLength} byte frame limit.",
+                        "${data.limits.maxFrameLength} byte frame limit.",
             )
         }
 
@@ -103,71 +131,79 @@ class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
         }
     }
 
-    override suspend fun receive(channel: ByteReadChannel, expectedDirection: Direction): MinecraftPacket? =
-        receiveMutex.withLock {
-            var length: Int? = null
-            var packetId: Int? = null
-            try {
-                val frameLength = readFrameLength(channel, expectedDirection)
-                length = frameLength
+    internal suspend fun receivePacketBytes(
+        channel: ByteReadChannel,
+        expectedDirection: Direction,
+    ): RawPacketFrame = receiveMutex.withLock {
+        var length: Int? = null
+        try {
+            val frameLength = readFrameLength(channel, expectedDirection)
+            length = frameLength
 
-                val payload = ByteArray(frameLength)
-                if (frameLength > 0) channel.readFully(payload)
+            val payload = ByteArray(frameLength)
+            if (frameLength > 0) channel.readFully(payload)
 
-                val packetBytes = ciphers?.decrypt?.update(payload) ?: payload
-                val threshold = compressionThreshold
-                val decodedPayload = if (threshold >= 0) {
-                    decodeCompressedPayload(packetBytes, expectedDirection, frameLength, threshold)
-                } else {
-                    packetBytes
-                }
+            val packetBytes = ciphers?.decrypt?.update(payload) ?: payload
+            val threshold = compressionThreshold
+            val decodedPayload = if (threshold >= 0) {
+                decodeCompressedPayload(packetBytes, expectedDirection, frameLength, threshold)
+            } else {
+                packetBytes
+            }
 
-                val reader = PacketReader(decodedPayload, limits = data.limits, nbt = data.nbtFormat)
-                packetId = reader.readVarInt()
-                val packet = decodePacket(reader, packetId, expectedDirection, frameLength)
+            RawPacketFrame(decodedPayload, frameLength)
+        } catch (cause: Throwable) {
+            if (cause is KmcPacketDecodeException) throw cause
+            throw KmcPacketDecodeException(
+                state = data.state,
+                direction = expectedDirection,
+                packetId = null,
+                frameLength = length,
+                details = cause.message ?: cause::class.simpleName.orEmpty(),
+                cause = cause,
+            )
+        }
+    }
 
-                if (reader.remaining > 0) {
-                    throw KmcPacketDecodeException(
-                        state = data.state,
-                        direction = expectedDirection,
-                        packetId = packetId,
-                        frameLength = frameLength,
-                        details = "Packet decoded successfully but left ${reader.remaining} trailing bytes unread.",
-                    )
-                }
-                packet
-            } catch (cause: Throwable) {
-                if (cause is KmcPacketDecodeException) throw cause
+    internal fun decodePacketBytes(
+        packetBytes: ByteArray,
+        expectedDirection: Direction,
+        frameLength: Int? = null,
+    ): MinecraftPacket {
+        var packetId: Int? = null
+        try {
+            val reader = PacketReader(packetBytes, limits = data.limits, nbt = data.nbtFormat)
+            packetId = reader.readVarInt()
+            val packet = decodePacket(reader, packetId, expectedDirection, frameLength)
+
+            if (reader.remaining > 0) {
                 throw KmcPacketDecodeException(
                     state = data.state,
                     direction = expectedDirection,
                     packetId = packetId,
-                    frameLength = length,
-                    details = cause.message ?: cause::class.simpleName.orEmpty(),
-                    cause = cause,
+                    frameLength = frameLength,
+                    details = "Packet decoded successfully but left ${reader.remaining} trailing bytes unread.",
                 )
             }
-        }
-
-    private fun encodePacket(packet: MinecraftPacket): ByteArray {
-        val metadata = data.registry.getPacketMetadata(data.state, packet)
-            ?: throw KmcPacketEncodeException(
-                packetClass = packet::class,
+            return packet
+        } catch (cause: Throwable) {
+            if (cause is KmcPacketDecodeException) throw cause
+            throw KmcPacketDecodeException(
                 state = data.state,
-                details = "No packet registration exists for this packet class in state ${data.state}.",
+                direction = expectedDirection,
+                packetId = packetId,
+                frameLength = frameLength,
+                details = cause.message ?: cause::class.simpleName.orEmpty(),
+                cause = cause,
             )
-
-        val writer = PacketWriter(nbt = data.nbtFormat)
-        writer.writeVarInt(metadata.id)
-        metadata.serializer.serialize(MinecraftEncoder(writer, data.codec, data.serializersModule), packet)
-        return writer.toByteArray()
+        }
     }
 
     private fun decodePacket(
         reader: PacketReader,
         packetId: Int,
         expectedDirection: Direction,
-        frameLength: Int,
+        frameLength: Int?,
     ): MinecraftPacket {
         val serializer = data.registry.getPacketSerializerById(data.state, packetId, expectedDirection)
             ?: throw KmcPacketDecodeException(
@@ -176,7 +212,7 @@ class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
                 packetId = packetId,
                 frameLength = frameLength,
                 details = "No packet serializer is registered for packet id 0x${packetId.toString(16)} in " +
-                    "${data.state}/$expectedDirection.",
+                        "${data.state}/$expectedDirection.",
             )
 
         return serializer.deserialize(MinecraftDecoder(reader, data.codec, data.serializersModule))
@@ -213,7 +249,7 @@ class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
                 null,
                 frameLength,
                 "Badly compressed packet: declared uncompressed length $dataLength is below the " +
-                    "negotiated compression threshold of $threshold.",
+                        "negotiated compression threshold of $threshold.",
             )
         }
 
@@ -224,7 +260,7 @@ class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
                 null,
                 frameLength,
                 "Compressed packet declares an uncompressed length of $dataLength bytes, which is outside " +
-                    "the permitted range of 1..${data.limits.maxUncompressedLength}.",
+                        "the permitted range of 1..${data.limits.maxUncompressedLength}.",
             )
         }
 

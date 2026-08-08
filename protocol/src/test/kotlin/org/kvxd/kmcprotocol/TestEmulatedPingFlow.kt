@@ -2,8 +2,9 @@ package org.kvxd.kmcprotocol
 
 import org.kvxd.kmcprotocol.core.ProtocolState
 import org.kvxd.kmcprotocol.generated.Protocols
-import org.kvxd.kmcprotocol.network.client.Client
-import org.kvxd.kmcprotocol.network.server.Server
+import org.kvxd.kmcprotocol.network.middleware.ProtocolMiddleware
+import org.kvxd.kmcprotocol.network.middleware.ProtocolMiddlewareSession
+import org.kvxd.kmcprotocol.network.middleware.RawProtocolPacket
 import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.clientbound.ClientboundFinishConfigurationPacket
 import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.serverbound.ServerboundFinishConfigurationPacket
 import org.kvxd.kmcprotocol.packets.generated.v1_21_4.handshake.serverbound.ServerboundSetProtocolPacket
@@ -12,10 +13,11 @@ import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.serverbound.Serverbo
 import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.serverbound.ServerboundLoginStartPacket
 import org.kvxd.kmcprotocol.packets.generated.v1_21_4.status.serverbound.ServerboundPingStartPacket
 import io.ktor.network.sockets.*
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.kvxd.kmcprotocol.network.client.Client
+import org.kvxd.kmcprotocol.network.server.Server
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -112,4 +114,39 @@ class TestEmulated {
         server.close()
     }
 
+    @Test
+    fun `cancelled middleware packet is skipped without closing the connection`() = runBlocking {
+        var inboundPackets = 0
+        val middleware = ProtocolMiddleware {
+            object : ProtocolMiddlewareSession {
+                override suspend fun inbound(packet: RawProtocolPacket): List<RawProtocolPacket> {
+                    inboundPackets++
+                    return if (inboundPackets == 1) emptyList() else listOf(packet)
+                }
+            }
+        }
+        val server = Server.bind(
+            InetSocketAddress("127.0.0.1", 0),
+            middlewares = listOf(middleware),
+        ) {
+            Protocols.V1_21_4.protocolData(automaticProtocolFlow = false)
+        }
+        val port = (server.localAddress as InetSocketAddress).port
+        val client = Client.connect(
+            InetSocketAddress("127.0.0.1", port),
+            Protocols.V1_21_4.protocolData(automaticProtocolFlow = false),
+        )
+        val session = withTimeout(5_000.milliseconds) { server.accept() }
+        val dropped = ServerboundSetProtocolPacket(769, "dropped", port, 1)
+        val delivered = ServerboundSetProtocolPacket(769, "delivered", port, 1)
+
+        client.send(dropped)
+        client.send(delivered)
+
+        assertEquals(delivered, withTimeout(5_000.milliseconds) { session.receive() })
+        assertEquals(2, inboundPackets)
+
+        client.close()
+        server.close()
+    }
 }

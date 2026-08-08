@@ -14,12 +14,15 @@ import kotlinx.coroutines.flow.flow
 import org.kvxd.kmcprotocol.core.KmcProtocolException
 import org.kvxd.kmcprotocol.core.ProtocolData
 import org.kvxd.kmcprotocol.network.KmcSelector
+import org.kvxd.kmcprotocol.network.middleware.ProtocolMiddleware
 
 class Server private constructor(
     private val socket: ServerSocket,
+    middlewares: List<ProtocolMiddleware>,
     private val sessionProtocolData: () -> ProtocolData,
 ) : AutoCloseable {
 
+    private val middlewares: List<ProtocolMiddleware> = middlewares.toList()
     private val activeSessions: MutableSet<ServerSession> = ConcurrentHashMap.newKeySet()
 
     private val closed = AtomicBoolean(false)
@@ -62,7 +65,7 @@ class Server private constructor(
             )
         }
 
-        val session = ServerSession(sessionSocket, sessionProtocolData())
+        val session = ServerSession(sessionSocket, sessionProtocolData(), middlewares)
         activeSessions += session
         session.invokeOnClose { activeSessions -= session }
 
@@ -87,13 +90,28 @@ class Server private constructor(
             address: SocketAddress = InetSocketAddress("0.0.0.0", 25565),
             selectorManager: SelectorManager = KmcSelector.shared,
             sessionProtocolData: () -> ProtocolData,
-        ): Server = Server(aSocket(selectorManager).tcp().bind(address), sessionProtocolData)
+        ): Server = bind(address, selectorManager, emptyList(), sessionProtocolData)
+
+        suspend fun bind(
+            address: SocketAddress,
+            selectorManager: SelectorManager = KmcSelector.shared,
+            middlewares: List<ProtocolMiddleware>,
+            sessionProtocolData: () -> ProtocolData,
+        ): Server = Server(aSocket(selectorManager).tcp().bind(address), middlewares, sessionProtocolData)
 
         suspend fun bind(
             host: String,
             port: Int,
             selectorManager: SelectorManager = KmcSelector.shared,
             sessionProtocolData: () -> ProtocolData,
-        ): Server = bind(InetSocketAddress(host, port), selectorManager, sessionProtocolData)
+        ): Server = bind(InetSocketAddress(host, port), selectorManager, emptyList(), sessionProtocolData)
+
+        suspend fun bind(
+            host: String,
+            port: Int,
+            selectorManager: SelectorManager = KmcSelector.shared,
+            middlewares: List<ProtocolMiddleware>,
+            sessionProtocolData: () -> ProtocolData,
+        ): Server = bind(InetSocketAddress(host, port), selectorManager, middlewares, sessionProtocolData)
     }
 }

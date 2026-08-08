@@ -4,7 +4,7 @@ import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
-import net.benwoodworth.knbt.NbtTag
+import net.lenni0451.mcstructs.nbt.NbtTag
 
 class ProtocolCodec(val types: ProtocolTypeTable) {
 
@@ -80,6 +80,3 @@ class ProtocolCodec(val types: ProtocolTypeTable) {
             ProtocolCodec(ProtocolTypeTable.fromProtocolJson(protocol))
     }
 }
-
-private fun kotlinx.serialization.descriptors.SerialDescriptor.isNbt(): Boolean =
-    serialName.startsWith("net.benwoodworth.knbt.")

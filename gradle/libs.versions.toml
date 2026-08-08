@@ -5,7 +5,7 @@ kotlin-coroutines = "1.11.0"
 kotlinx-serialization-json = "1.11.0"
 ktor = "3.5.1"
 adventure = "4.19.0"
-knbt = "0.11.8"
+mcstructs = "3.3.1"
 minecraft = "1.21.4"
 fabric-loader = "0.16.9"
 fabric-api = "0.119.3+1.21.4"
@@ -20,7 +20,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 ktor-network = { module = "io.ktor:ktor-network", version.ref = "ktor" }
 ktor-network-tls = { module = "io.ktor:ktor-network-tls", version.ref = "ktor" }
 
-knbt = { module = "net.benwoodworth.knbt:knbt", version.ref = "knbt" }
+mcstructs-nbt = { module = "net.lenni0451.mcstructs:nbt", version.ref = "mcstructs" }
 adventure-text-serializer-gson = { module = "net.kyori:adventure-text-serializer-gson", version.ref = "adventure" }
 fabric-api = { module = "net.fabricmc.fabric-api:fabric-api", version.ref = "fabric-api" }
 fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-loader" }
@@ -28,7 +28,7 @@ fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-l
 [bundles]
 kotlin-coroutines = ["kotlin-coroutines", "kotlin-coroutines-test"]
 ktor = ["ktor-network", "ktor-network-tls"]
-serialization = ["knbt", "adventure-text-serializer-gson", "kotlinx-serialization-json"]
+serialization = ["mcstructs-nbt", "adventure-text-serializer-gson", "kotlinx-serialization-json"]
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

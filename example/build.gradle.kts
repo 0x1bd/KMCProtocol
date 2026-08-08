@@ -13,7 +13,7 @@ dependencies {
     implementation(libs.bundles.ktor)
     implementation(libs.bundles.kotlin.coroutines)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.knbt)
+    implementation(libs.mcstructs.nbt)
 
     testImplementation(kotlin("test"))
 }

@@ -113,9 +113,9 @@ internal class DynamicSampler(private val types: ProtocolTypeTable) {
             "string" -> "minecraft:sample"
             "UUID" -> java.util.UUID(0L, 1L)
             "restBuffer" -> ByteArray(0)
-            "anonymousNbt" -> SampleNbtCompound
+            "anonymousNbt" -> sampleNbtCompound()
             "anonOptionalNbt" -> null
-            "nbt" -> SampleNbtCompound
+            "nbt" -> sampleNbtCompound()
             "compressedNbt" -> null
             "u64" -> 0L
             "byte_array" -> ByteArray(0)

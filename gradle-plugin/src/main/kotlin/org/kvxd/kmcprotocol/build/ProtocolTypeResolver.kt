@@ -32,7 +32,7 @@ internal class ProtocolTypeResolver(
     private val protocolEnumValue = ClassName("${options.runtimePackage}.core.encoding", "ProtocolEnumValue")
     private val protocolSwitchPayload = ClassName("${options.runtimePackage}.core.encoding", "ProtocolSwitchPayload")
     private val byteArray = ClassName("kotlin", "ByteArray")
-    private val nbtTag = ClassName("net.benwoodworth.knbt", "NbtTag")
+    private val nbtTag = ClassName("net.lenni0451.mcstructs.nbt", "NbtTag")
     private val lpVec3 = ClassName("${options.runtimePackage}.core", "LpVec3")
     private val uuid = ClassName("java.util", "UUID")
     private val protocolBitfield = ClassName("${options.runtimePackage}.core.encoding", "ProtocolBitfield")
@@ -46,11 +46,13 @@ internal class ProtocolTypeResolver(
     private val protocolType = ClassName("${options.runtimePackage}.core.encoding", "ProtocolType")
     private val numberEncoding = ClassName("${options.runtimePackage}.core.encoding", "NumberEncoding")
     private val uuidSerializer = ClassName("${options.runtimePackage}.core.encoding", "UuidSerializer")
+    private val nbtTagSerializer = ClassName("${options.runtimePackage}.core.encoding", "NbtTagSerializer")
 
     private fun useSerializersAnnotation(): AnnotationSpec =
         AnnotationSpec.builder(ClassName("kotlinx.serialization", "UseSerializers"))
             .useSiteTarget(AnnotationSpec.UseSiteTarget.FILE)
             .addMember("%T::class", uuidSerializer)
+            .addMember("%T::class", nbtTagSerializer)
             .build()
 
     private val emittedTypes = mutableMapOf<String, ClassName>()

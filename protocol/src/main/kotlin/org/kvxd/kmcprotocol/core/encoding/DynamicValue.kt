@@ -1,7 +1,7 @@
 package org.kvxd.kmcprotocol.core.encoding
 
 import kotlinx.serialization.SerialName
-import net.benwoodworth.knbt.NbtTag
+import net.lenni0451.mcstructs.nbt.NbtTag
 import java.util.UUID
 import kotlin.reflect.KProperty1
 import kotlin.reflect.full.findAnnotation

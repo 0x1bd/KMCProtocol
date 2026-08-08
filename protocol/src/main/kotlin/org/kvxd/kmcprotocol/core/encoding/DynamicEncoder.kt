@@ -9,7 +9,7 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import net.benwoodworth.knbt.NbtTag
+import net.lenni0451.mcstructs.nbt.NbtTag
 import org.kvxd.kmcprotocol.core.KmcProtocolException
 import java.util.UUID
 
@@ -211,12 +211,12 @@ internal class DynamicEncoder(
             "string" -> writer.writeString(value as? String ?: "")
             "UUID" -> writer.writeUuid(value.asUuid())
             "restBuffer" -> writer.writeBytes((value as? ByteArray) ?: ByteArray(0))
-            "anonymousNbt" -> writer.writeNbtTag((value as? NbtTag) ?: EmptyNbtCompound)
+            "anonymousNbt" -> writer.writeNbtTag((value as? NbtTag) ?: emptyNbtCompound())
             "anonOptionalNbt" -> {
                 val tag = value as? NbtTag
-                if (tag == null) writer.writeByte(NbtType.End.toByte()) else writer.writeNbtTag(tag)
+                if (tag == null) writer.writeByte(NbtEndTypeId) else writer.writeNbtTag(tag)
             }
-            "nbt" -> writer.writeNamedNbtTag((value as? NbtTag) ?: EmptyNbtCompound)
+            "nbt" -> writer.writeNamedNbtTag((value as? NbtTag) ?: emptyNbtCompound())
             "compressedNbt" -> writer.writeCompressedNbtTag(value as? NbtTag)
             "u64" -> writer.writeLong((value as? Number)?.toLong() ?: 0L)
             "byte_array" -> {
@@ -234,7 +234,7 @@ internal class DynamicEncoder(
             }
             "optionalNbt" -> {
                 val tag = value as? NbtTag
-                if (tag == null) writer.writeByte(NbtType.End.toByte()) else writer.writeNamedNbtTag(tag)
+                if (tag == null) writer.writeByte(NbtEndTypeId) else writer.writeNamedNbtTag(tag)
             }
             else -> throw KmcProtocolException("Unsupported scalar protocol type: $name")
         }

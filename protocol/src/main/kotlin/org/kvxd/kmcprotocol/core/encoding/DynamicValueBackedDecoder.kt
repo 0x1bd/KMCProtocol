@@ -8,7 +8,7 @@ import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.modules.SerializersModule
-import net.benwoodworth.knbt.NbtTag
+import net.lenni0451.mcstructs.nbt.NbtTag
 
 internal class DynamicValueBackedDecoder(
     private val value: Any?,
@@ -89,7 +89,7 @@ internal class DynamicValueBackedDecoder(
 
     override fun <T> decodeSerializableValue(deserializer: DeserializationStrategy<T>): T {
         val unwrapped = currentValue.unwrap()
-        if (unwrapped is NbtTag && deserializer.descriptor.serialName.startsWith("net.benwoodworth.knbt.")) {
+        if (unwrapped is NbtTag && deserializer.descriptor.isNbt()) {
             @Suppress("UNCHECKED_CAST")
             return unwrapped as T
         }

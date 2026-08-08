@@ -4,6 +4,7 @@ class ProtocolLimits(
     val maxFrameLength: Int = DefaultMaxFrameLength,
     val maxUncompressedLength: Int = DefaultMaxUncompressedLength,
     val maxNbtDepth: Int = DefaultMaxNbtDepth,
+    val maxNbtBytes: Long = DefaultMaxNbtBytes,
     val maxCompressedNbtLength: Int = DefaultMaxCompressedNbtLength,
     val validateDecompressedSize: Boolean = false,
 ) {
@@ -16,6 +17,9 @@ class ProtocolLimits(
         }
         require(maxNbtDepth >= 1) {
             "maxNbtDepth must be positive but was $maxNbtDepth"
+        }
+        require(maxNbtBytes >= 1) {
+            "maxNbtBytes must be positive but was $maxNbtBytes"
         }
         require(maxCompressedNbtLength >= 1) {
             "maxCompressedNbtLength must be positive but was $maxCompressedNbtLength"
@@ -30,6 +34,8 @@ class ProtocolLimits(
         const val DefaultMaxUncompressedLength: Int = 8 * 1024 * 1024
 
         const val DefaultMaxNbtDepth: Int = 512
+
+        const val DefaultMaxNbtBytes: Long = 8L * 1024 * 1024
 
         const val DefaultMaxCompressedNbtLength: Int = 8 * 1024 * 1024
 

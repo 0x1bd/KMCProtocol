@@ -20,7 +20,7 @@ dependencies {
     api(libs.ktor.network)
     api(libs.kotlin.coroutines)
     api(libs.kotlinx.serialization.json)
-    api(libs.knbt)
+    api(libs.mcstructs.nbt)
 
     implementation(libs.kotlin.reflect)
 

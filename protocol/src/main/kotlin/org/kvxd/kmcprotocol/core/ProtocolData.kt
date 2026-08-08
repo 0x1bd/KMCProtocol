@@ -4,6 +4,7 @@ import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.modules.SerializersModule
+import org.kvxd.kmcprotocol.core.encoding.NbtFormat
 import org.kvxd.kmcprotocol.core.encoding.ProtocolCodec
 import org.kvxd.kmcprotocol.core.format.impl.MinecraftPacketFormat
 import org.kvxd.kmcprotocol.network.Direction
@@ -15,6 +16,7 @@ class ProtocolData(
     val serializersModule: SerializersModule = EmptySerializersModule(),
     val registry: PacketRegistry = PacketRegistry(),
     val limits: ProtocolLimits = ProtocolLimits.Default,
+    val nbtFormat: NbtFormat = NbtFormat.Latest,
 ) {
 
     @Volatile

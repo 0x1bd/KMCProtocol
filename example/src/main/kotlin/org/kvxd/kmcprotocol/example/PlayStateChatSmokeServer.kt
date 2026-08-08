@@ -5,8 +5,7 @@ import java.util.UUID
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import net.benwoodworth.knbt.NbtCompound
-import net.benwoodworth.knbt.NbtString
+import net.lenni0451.mcstructs.nbt.tags.CompoundTag
 import org.kvxd.kmcprotocol.core.KmcProtocolException
 import org.kvxd.kmcprotocol.core.ProtocolState
 import org.kvxd.kmcprotocol.generated.Protocols
@@ -241,4 +240,4 @@ private suspend fun ServerSession.sendChat(text: String) {
     send(ClientboundSystemChatPacket(content = textComponent(text), isActionBar = false))
 }
 
-private fun textComponent(text: String) = NbtCompound(mapOf("text" to NbtString(text)))
+private fun textComponent(text: String) = CompoundTag().addString("text", text)

@@ -2,6 +2,7 @@ package org.kvxd.kmcprotocol.core
 
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.modules.SerializersModule
+import org.kvxd.kmcprotocol.core.encoding.NbtFormat
 import org.kvxd.kmcprotocol.core.encoding.ProtocolCodec
 
 class ProtocolVersion(
@@ -13,6 +14,8 @@ class ProtocolVersion(
 
     val codec: ProtocolCodec by lazy { ProtocolCodec.fromResource(protocolResourcePath) }
 
+    val nbtFormat: NbtFormat = NbtFormat.forMinecraftVersion(minecraftVersion)
+
     val packetRegistry: PacketRegistry by lazy { newPacketRegistry() }
 
     fun newPacketRegistry(): PacketRegistry = PacketRegistry(listOf(registrySource))
@@ -23,6 +26,7 @@ class ProtocolVersion(
         serializersModule: SerializersModule = EmptySerializersModule(),
         registry: PacketRegistry = packetRegistry,
         limits: ProtocolLimits = ProtocolLimits.Default,
+        nbtFormat: NbtFormat = this.nbtFormat,
     ): ProtocolData = ProtocolData(
         initialState = initialState,
         automaticProtocolFlow = automaticProtocolFlow,
@@ -30,6 +34,7 @@ class ProtocolVersion(
         serializersModule = serializersModule,
         registry = registry,
         limits = limits,
+        nbtFormat = nbtFormat,
     )
 
     override fun toString(): String = "ProtocolVersion($minecraftVersion, protocol $protocolVersion)"

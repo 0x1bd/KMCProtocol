@@ -1,8 +1,8 @@
 package org.kvxd.kmcprotocol.example
 
-import net.benwoodworth.knbt.NbtCompound
-import net.benwoodworth.knbt.NbtInt
-import net.benwoodworth.knbt.NbtString
+import net.lenni0451.mcstructs.nbt.tags.CompoundTag
+import net.lenni0451.mcstructs.nbt.tags.IntTag
+import net.lenni0451.mcstructs.nbt.tags.StringTag
 import org.kvxd.kmcprotocol.generated.Protocols
 import io.ktor.utils.io.ByteChannel
 import kotlin.test.Test
@@ -25,11 +25,11 @@ class VanillaRegistryDataTest {
 
         assertTrue(VanillaRegistryData.registries.all { (_, entries) -> entries.isNotEmpty() })
         val aquaAffinity = assertNotNull(enchantments.singleOrNull { it.key == "minecraft:aqua_affinity" })
-        val value = assertIs<NbtCompound>(aquaAffinity.value)
-        val description = assertIs<NbtCompound>(value["description"])
+        val value = assertIs<CompoundTag>(aquaAffinity.value)
+        val description = assertIs<CompoundTag>(value["description"])
 
-        assertEquals(NbtString("enchantment.minecraft.aqua_affinity"), description["translate"])
-        assertEquals(NbtInt(1), value["max_level"])
+        assertEquals(StringTag("enchantment.minecraft.aqua_affinity"), description["translate"])
+        assertEquals(IntTag(1), value["max_level"])
         assertTrue(enchantments.all { it.value != null })
     }
 

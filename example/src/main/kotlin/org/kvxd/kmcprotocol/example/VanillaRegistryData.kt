@@ -1,18 +1,13 @@
 package org.kvxd.kmcprotocol.example
 
-import net.benwoodworth.knbt.NbtByte
-import net.benwoodworth.knbt.NbtByteArray
-import net.benwoodworth.knbt.NbtCompound
-import net.benwoodworth.knbt.NbtDouble
-import net.benwoodworth.knbt.NbtFloat
-import net.benwoodworth.knbt.NbtInt
-import net.benwoodworth.knbt.NbtIntArray
-import net.benwoodworth.knbt.NbtList
-import net.benwoodworth.knbt.NbtLong
-import net.benwoodworth.knbt.NbtLongArray
-import net.benwoodworth.knbt.NbtShort
-import net.benwoodworth.knbt.NbtString
-import net.benwoodworth.knbt.NbtTag
+import net.lenni0451.mcstructs.nbt.NbtTag
+import net.lenni0451.mcstructs.nbt.tags.ByteTag
+import net.lenni0451.mcstructs.nbt.tags.CompoundTag
+import net.lenni0451.mcstructs.nbt.tags.DoubleTag
+import net.lenni0451.mcstructs.nbt.tags.IntTag
+import net.lenni0451.mcstructs.nbt.tags.ListTag
+import net.lenni0451.mcstructs.nbt.tags.LongTag
+import net.lenni0451.mcstructs.nbt.tags.StringTag
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -66,39 +61,17 @@ internal object VanillaRegistryData {
 
     private fun JsonElement.toNbtTag(): NbtTag =
         when (this) {
-            is JsonObject -> NbtCompound(mapValues { (_, value) -> value.toNbtTag() })
-            is JsonArray -> toNbtList(map { it.toNbtTag() })
+            is JsonObject -> CompoundTag(mapValues { (_, value) -> value.toNbtTag() })
+            is JsonArray -> ListTag(map { it.toNbtTag() })
             is JsonPrimitive -> toNbtTag()
         }
 
     private fun JsonPrimitive.toNbtTag(): NbtTag =
         when {
-            isString -> NbtString(content)
-            booleanOrNull != null -> NbtByte(booleanOrNull!!)
-            intOrNull != null -> NbtInt(int)
-            longOrNull != null -> NbtLong(longOrNull!!)
-            else -> NbtDouble(double)
+            isString -> StringTag(content)
+            booleanOrNull != null -> ByteTag(booleanOrNull!!)
+            intOrNull != null -> IntTag(int)
+            longOrNull != null -> LongTag(longOrNull!!)
+            else -> DoubleTag(double)
         }
-
-    private fun toNbtList(values: List<NbtTag>): NbtList<*> {
-        require(values.map { it::class }.distinct().size <= 1) {
-            "NBT lists cannot contain mixed tag types: $values"
-        }
-
-        return when (values.firstOrNull()) {
-            null -> NbtList(emptyList<NbtByte>())
-            is NbtByte -> NbtList(values.filterIsInstance<NbtByte>())
-            is NbtShort -> NbtList(values.filterIsInstance<NbtShort>())
-            is NbtInt -> NbtList(values.filterIsInstance<NbtInt>())
-            is NbtLong -> NbtList(values.filterIsInstance<NbtLong>())
-            is NbtFloat -> NbtList(values.filterIsInstance<NbtFloat>())
-            is NbtDouble -> NbtList(values.filterIsInstance<NbtDouble>())
-            is NbtByteArray -> NbtList(values.filterIsInstance<NbtByteArray>())
-            is NbtString -> NbtList(values.filterIsInstance<NbtString>())
-            is NbtList<*> -> NbtList(values.filterIsInstance<NbtList<*>>())
-            is NbtCompound -> NbtList(values.filterIsInstance<NbtCompound>())
-            is NbtIntArray -> NbtList(values.filterIsInstance<NbtIntArray>())
-            is NbtLongArray -> NbtList(values.filterIsInstance<NbtLongArray>())
-        }
-    }
 }

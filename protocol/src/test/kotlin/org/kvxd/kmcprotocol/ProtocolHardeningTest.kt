@@ -7,7 +7,7 @@ import org.kvxd.kmcprotocol.core.KmcPacketDecodeException
 import org.kvxd.kmcprotocol.core.KmcProtocolException
 import org.kvxd.kmcprotocol.core.ProtocolLimits
 import org.kvxd.kmcprotocol.core.encoding.DynamicValue
-import org.kvxd.kmcprotocol.core.encoding.NbtType
+import net.lenni0451.mcstructs.nbt.NbtType
 import org.kvxd.kmcprotocol.core.encoding.PacketReader
 import org.kvxd.kmcprotocol.core.encoding.PacketWriter
 import org.kvxd.kmcprotocol.core.encoding.readNbtPayload
@@ -119,14 +119,14 @@ class ProtocolHardeningTest {
         val depth = ProtocolLimits.DefaultMaxNbtDepth + 32
         val writer = PacketWriter()
         repeat(depth) {
-            writer.writeByte(NbtType.Compound.toByte())
+            writer.writeByte(NbtType.COMPOUND.id.toByte())
             writer.writeNbtString("n")
         }
-        repeat(depth + 1) { writer.writeByte(NbtType.End.toByte()) }
+        repeat(depth + 1) { writer.writeByte(NbtType.END.id.toByte()) }
 
         val reader = PacketReader(writer.toByteArray())
-        val failure = assertFailsWith<KmcProtocolException> { reader.readNbtPayload(NbtType.Compound) }
-        assertTrue(failure.message!!.contains("maximum depth"), failure.message!!)
+        val failure = assertFailsWith<KmcProtocolException> { reader.readNbtPayload(NbtType.COMPOUND) }
+        assertTrue(failure.message!!.contains("depth"), failure.message!!)
     }
 
     @Test
@@ -136,30 +136,30 @@ class ProtocolHardeningTest {
         writer.writeBytes(ByteArray(8))
 
         val reader = PacketReader(writer.toByteArray())
-        val failure = assertFailsWith<KmcProtocolException> { reader.readNbtPayload(NbtType.LongArray) }
-        assertTrue(failure.message!!.contains("bytes remain"), failure.message!!)
+        val failure = assertFailsWith<KmcProtocolException> { reader.readNbtPayload(NbtType.LONG_ARRAY) }
+        assertTrue(failure.message!!.contains("larger Nbt than allowed"), failure.message!!)
     }
 
     @Test
     fun `an nbt list longer than the remaining bytes is rejected`() {
         val writer = PacketWriter()
-        writer.writeByte(NbtType.Long.toByte())
+        writer.writeByte(NbtType.LONG.id.toByte())
         writer.writeInt(Int.MAX_VALUE / 4)
         writer.writeBytes(ByteArray(8))
 
         val reader = PacketReader(writer.toByteArray())
-        val failure = assertFailsWith<KmcProtocolException> { reader.readNbtPayload(NbtType.List) }
-        assertTrue(failure.message!!.contains("bytes remain"), failure.message!!)
+        val failure = assertFailsWith<KmcProtocolException> { reader.readNbtPayload(NbtType.LIST) }
+        assertTrue(failure.message!!.contains("larger Nbt than allowed"), failure.message!!)
     }
 
     @Test
     fun `an end typed nbt list must be empty`() {
         val writer = PacketWriter()
-        writer.writeByte(NbtType.End.toByte())
+        writer.writeByte(NbtType.END.id.toByte())
         writer.writeInt(3)
 
         val reader = PacketReader(writer.toByteArray())
-        val failure = assertFailsWith<KmcProtocolException> { reader.readNbtPayload(NbtType.List) }
+        val failure = assertFailsWith<KmcProtocolException> { reader.readNbtPayload(NbtType.LIST) }
         assertTrue(failure.message!!.contains("END"), failure.message!!)
     }
 
@@ -206,6 +206,7 @@ class ProtocolHardeningTest {
     fun `packet limits are validated on construction`() {
         assertFailsWith<IllegalArgumentException> { ProtocolLimits(maxFrameLength = 0) }
         assertFailsWith<IllegalArgumentException> { ProtocolLimits(maxNbtDepth = 0) }
+        assertFailsWith<IllegalArgumentException> { ProtocolLimits(maxNbtBytes = 0) }
         assertFailsWith<IllegalArgumentException> {
             ProtocolLimits(maxFrameLength = ProtocolLimits.MaxEncodableFrameLength + 1)
         }

@@ -122,7 +122,7 @@ class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
                     packetBytes
                 }
 
-                val reader = PacketReader(decodedPayload, limits = data.limits)
+                val reader = PacketReader(decodedPayload, limits = data.limits, nbt = data.nbtFormat)
                 packetId = reader.readVarInt()
                 val packet = decodePacket(reader, packetId, expectedDirection, frameLength)
 
@@ -157,7 +157,7 @@ class MinecraftPacketFormat(private val data: ProtocolData) : PacketFormat {
                 details = "No packet registration exists for this packet class in state ${data.state}.",
             )
 
-        val writer = PacketWriter()
+        val writer = PacketWriter(nbt = data.nbtFormat)
         writer.writeVarInt(metadata.id)
         metadata.serializer.serialize(MinecraftEncoder(writer, data.codec, data.serializersModule), packet)
         return writer.toByteArray()

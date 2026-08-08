@@ -2,7 +2,7 @@ package org.kvxd.kmcprotocol.core.encoding
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialInfo
-import net.benwoodworth.knbt.NbtTag
+import net.lenni0451.mcstructs.nbt.NbtTag
 import org.kvxd.kmcprotocol.core.KmcProtocolException
 
 enum class BinaryKind {
@@ -27,15 +27,15 @@ annotation class ProtocolBinary(
 
 internal fun PacketWriter.writeBinary(spec: ProtocolBinary, value: Any?) {
     when (spec.kind) {
-        BinaryKind.AnonymousNbt -> writeNbtTag((value as? NbtTag) ?: EmptyNbtCompound)
+        BinaryKind.AnonymousNbt -> writeNbtTag((value as? NbtTag) ?: emptyNbtCompound())
         BinaryKind.AnonOptionalNbt -> {
             val tag = value as? NbtTag
-            if (tag == null) writeByte(NbtType.End.toByte()) else writeNbtTag(tag)
+            if (tag == null) writeByte(NbtEndTypeId) else writeNbtTag(tag)
         }
-        BinaryKind.Nbt -> writeNamedNbtTag((value as? NbtTag) ?: EmptyNbtCompound)
+        BinaryKind.Nbt -> writeNamedNbtTag((value as? NbtTag) ?: emptyNbtCompound())
         BinaryKind.OptionalNbt -> {
             val tag = value as? NbtTag
-            if (tag == null) writeByte(NbtType.End.toByte()) else writeNamedNbtTag(tag)
+            if (tag == null) writeByte(NbtEndTypeId) else writeNamedNbtTag(tag)
         }
         BinaryKind.CompressedNbt -> writeCompressedNbtTag(value as? NbtTag)
         BinaryKind.RestBuffer -> writeBytes((value as? ByteArray) ?: ByteArray(0))
@@ -50,9 +50,9 @@ internal fun PacketWriter.writeBinary(spec: ProtocolBinary, value: Any?) {
 
 internal fun PacketReader.readBinary(spec: ProtocolBinary): Any? =
     when (spec.kind) {
-        BinaryKind.AnonymousNbt -> readNbtTag() ?: EmptyNbtCompound
+        BinaryKind.AnonymousNbt -> readNbtTag() ?: emptyNbtCompound()
         BinaryKind.AnonOptionalNbt -> readNbtTag()
-        BinaryKind.Nbt -> readNamedNbtTag() ?: EmptyNbtCompound
+        BinaryKind.Nbt -> readNamedNbtTag() ?: emptyNbtCompound()
         BinaryKind.OptionalNbt -> readNamedNbtTag()
         BinaryKind.CompressedNbt -> readCompressedNbtTag()
         BinaryKind.RestBuffer -> readRemaining()

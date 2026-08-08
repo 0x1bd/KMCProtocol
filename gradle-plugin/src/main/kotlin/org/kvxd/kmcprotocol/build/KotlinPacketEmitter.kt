@@ -29,6 +29,7 @@ internal class KotlinPacketEmitter(
     private val serialName = ClassName("kotlinx.serialization", "SerialName")
     private val serializable = ClassName("kotlinx.serialization", "Serializable")
     private val uuidSerializer = ClassName("${options.runtimePackage}.core.encoding", "UuidSerializer")
+    private val nbtTagSerializer = ClassName("${options.runtimePackage}.core.encoding", "NbtTagSerializer")
     private val protocolArray = ClassName("${options.runtimePackage}.core.encoding", "ProtocolArray")
     private val protocolBinary = ClassName("${options.runtimePackage}.core.encoding", "ProtocolBinary")
     private val binaryKind = ClassName("${options.runtimePackage}.core.encoding", "BinaryKind")
@@ -258,6 +259,7 @@ internal class KotlinPacketEmitter(
                 AnnotationSpec.builder(ClassName("kotlinx.serialization", "UseSerializers"))
                     .useSiteTarget(AnnotationSpec.UseSiteTarget.FILE)
                     .addMember("%T::class", uuidSerializer)
+                    .addMember("%T::class", nbtTagSerializer)
                     .build()
             )
 }

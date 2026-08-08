@@ -241,7 +241,7 @@ internal class SamplePacketDecoder(private val codec: ProtocolCodec) : Decoder, 
         val name = deserializer.descriptor.serialName
         if (name == "java.util.UUID") return java.util.UUID(0L, 1L) as T
         if (name == "kotlin.ByteArray") return ByteArray(0) as T
-        if (name.startsWith("net.benwoodworth.knbt.")) return net.benwoodworth.knbt.NbtCompound(emptyMap()) as T
+        if (name.startsWith("net.lenni0451.mcstructs.nbt.")) return net.lenni0451.mcstructs.nbt.tags.CompoundTag() as T
         return deserializer.deserialize(this)
     }
 
@@ -356,9 +356,8 @@ internal class SamplePacketDecoder(private val codec: ProtocolCodec) : Decoder, 
             BinaryKind.RestBuffer -> ByteArray(0)
             BinaryKind.Buffer -> ByteArray(if (spec.fixedCount >= 0) spec.fixedCount else 0)
             BinaryKind.AnonOptionalNbt, BinaryKind.OptionalNbt, BinaryKind.CompressedNbt -> null
-            BinaryKind.AnonymousNbt, BinaryKind.Nbt -> net.benwoodworth.knbt.NbtCompound(
-                mapOf("text" to net.benwoodworth.knbt.NbtString("sample"))
-            )
+            BinaryKind.AnonymousNbt, BinaryKind.Nbt ->
+                net.lenni0451.mcstructs.nbt.tags.CompoundTag().addString("text", "sample")
         }
 
     private fun recordElement(descriptor: SerialDescriptor, index: Int, value: Any?) {

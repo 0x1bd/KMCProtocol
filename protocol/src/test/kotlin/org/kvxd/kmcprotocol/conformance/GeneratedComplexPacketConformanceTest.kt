@@ -2,9 +2,7 @@ package org.kvxd.kmcprotocol.conformance
 
 import org.kvxd.kmcprotocol.generated.Protocols
 import io.ktor.utils.io.ByteChannel
-import net.benwoodworth.knbt.NbtCompound
-import net.benwoodworth.knbt.NbtInt
-import net.benwoodworth.knbt.NbtString
+import net.lenni0451.mcstructs.nbt.tags.CompoundTag
 import org.kvxd.kmcprotocol.core.MinecraftPacket
 import org.kvxd.kmcprotocol.core.ProtocolState
 import org.kvxd.kmcprotocol.network.Direction
@@ -55,12 +53,9 @@ class GeneratedComplexPacketConformanceTest {
     @Test
     fun `anonymous nbt packet round trips`() = runTest {
         val packet = ClientboundSystemChatPacket(
-            content = NbtCompound(
-                mapOf(
-                    "text" to NbtString("KMCProtocol"),
-                    "color" to NbtString("green"),
-                )
-            ),
+            content = CompoundTag()
+                .addString("text", "KMCProtocol")
+                .addString("color", "green"),
             isActionBar = false,
         )
 
@@ -71,12 +66,9 @@ class GeneratedComplexPacketConformanceTest {
     fun `optional nbt packet round trips`() = runTest {
         val packet = ClientboundNbtQueryResponsePacket(
             transactionId = 42,
-            nbt = NbtCompound(
-                mapOf(
-                    "name" to NbtString("KMCProtocol"),
-                    "value" to NbtInt(7),
-                )
-            ),
+            nbt = CompoundTag()
+                .addString("name", "KMCProtocol")
+                .addInt("value", 7),
         )
 
         assertEquals(packet, roundTrip(packet, ProtocolState.Play, Direction.Clientbound))

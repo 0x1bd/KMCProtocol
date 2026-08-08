@@ -6,7 +6,7 @@ import java.util.UUID
 
 private const val MaxBufferSize = Int.MAX_VALUE - 8
 
-class PacketWriter(initialCapacity: Int = 64) {
+class PacketWriter(initialCapacity: Int = 64, val nbt: NbtFormat = NbtFormat.Latest) {
 
     private var buffer = ByteArray(initialCapacity.coerceAtLeast(16).coerceAtMost(MaxBufferSize))
     private var length = 0
@@ -132,6 +132,7 @@ class PacketReader(
     private val buffer: ByteArray,
     private var position: Int = 0,
     val limits: ProtocolLimits = ProtocolLimits.Default,
+    val nbt: NbtFormat = NbtFormat.Latest,
 ) {
 
     val remaining: Int
@@ -190,6 +191,12 @@ class PacketReader(
         val value = buffer.copyOfRange(position, position + count)
         position += count
         return value
+    }
+
+    fun readInto(destination: ByteArray, offset: Int, count: Int) {
+        require(count)
+        buffer.copyInto(destination, offset, position, position + count)
+        position += count
     }
 
     fun readRemaining(): ByteArray = readBytes(remaining)

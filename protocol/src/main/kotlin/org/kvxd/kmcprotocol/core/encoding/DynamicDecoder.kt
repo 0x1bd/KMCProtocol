@@ -223,9 +223,9 @@ internal class DynamicDecoder(
             "string" -> reader.readString()
             "UUID" -> reader.readUuid()
             "restBuffer" -> reader.readRemaining()
-            "anonymousNbt" -> reader.readNbtTag() ?: EmptyNbtCompound
+            "anonymousNbt" -> reader.readNbtTag() ?: emptyNbtCompound()
             "anonOptionalNbt" -> reader.readNbtTag()
-            "nbt" -> reader.readNamedNbtTag() ?: EmptyNbtCompound
+            "nbt" -> reader.readNamedNbtTag() ?: emptyNbtCompound()
             "compressedNbt" -> reader.readCompressedNbtTag()
             "u64" -> reader.readLong()
             "byte_array" -> reader.readBytes(reader.readShort().toInt())

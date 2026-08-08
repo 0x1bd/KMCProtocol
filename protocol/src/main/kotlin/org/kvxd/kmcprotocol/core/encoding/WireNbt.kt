@@ -2,6 +2,7 @@ package org.kvxd.kmcprotocol.core.encoding
 
 import net.lenni0451.mcstructs.nbt.NbtTag
 import net.lenni0451.mcstructs.nbt.NbtType
+import net.lenni0451.mcstructs.nbt.exceptions.NbtReadException
 import net.lenni0451.mcstructs.nbt.io.NbtReadTracker
 import net.lenni0451.mcstructs.nbt.tags.CompoundTag
 import org.kvxd.kmcprotocol.core.KmcProtocolException
@@ -39,7 +40,9 @@ internal fun PacketReader.readNamedNbtTag(): NbtTag? = nbtRead {
 }
 
 internal fun PacketReader.readNbtPayload(type: NbtType): NbtTag = nbtRead {
-    nbt.io.reader.read(type, asDataInput(), readTracker())
+    val tracker = readTracker()
+    tracker.pushDepth()
+    nbt.io.reader.read(type, asDataInput(), tracker).also { tracker.popDepth() }
 }
 
 internal fun PacketWriter.writeNbtString(value: String) = nbtWrite {
@@ -94,8 +97,32 @@ private fun ByteArray.gunzip(limit: Int): ByteArray {
     return output.toByteArray()
 }
 
+private const val NbtBudgetPerRemainingByte = 128L
+
 private fun PacketReader.readTracker(): NbtReadTracker =
-    NbtReadTracker(limits.maxNbtDepth, limits.maxNbtBytes)
+    BoundedNbtReadTracker(limits.maxNbtDepth, readBudget())
+
+private fun PacketReader.readBudget(): Long =
+    minOf(limits.maxNbtBytes, remaining.toLong() * NbtBudgetPerRemainingByte).coerceAtLeast(1L)
+
+private class BoundedNbtReadTracker(
+    private val maxDepth: Int,
+    maxBytes: Long,
+) : NbtReadTracker(maxDepth, maxBytes) {
+
+    private var depth = 0
+
+    override fun pushDepth() {
+        depth++
+        if (depth > maxDepth) {
+            throw NbtReadException("Tried to read NBT nested deeper than the maximum depth of $maxDepth")
+        }
+    }
+
+    override fun popDepth() {
+        depth--
+    }
+}
 
 private fun PacketWriter.asDataOutput(): DataOutput = DataOutputStream(PacketWriterStream(this))
 
@@ -110,21 +137,23 @@ private inline fun <T> nbtWrite(block: () -> T): T =
             cause,
         )
     } catch (cause: IOException) {
-        throw KmcProtocolException("Failed to write NBT: ${cause.message}", cause)
+        throw KmcProtocolException("Failed to write NBT: ${cause.describe()}", cause)
     } catch (cause: RuntimeException) {
         if (cause is KmcProtocolException) throw cause
-        throw KmcProtocolException("Failed to write NBT: ${cause.message}", cause)
+        throw KmcProtocolException("Failed to write NBT: ${cause.describe()}", cause)
     }
 
 private inline fun <T> nbtRead(block: () -> T): T =
     try {
         block()
     } catch (cause: IOException) {
-        throw KmcProtocolException("Failed to read NBT: ${cause.message}", cause)
+        throw KmcProtocolException("Failed to read NBT: ${cause.describe()}", cause)
     } catch (cause: RuntimeException) {
         if (cause is KmcProtocolException) throw cause
-        throw KmcProtocolException("Failed to read NBT: ${cause.message}", cause)
+        throw KmcProtocolException("Failed to read NBT: ${cause.describe()}", cause)
     }
+
+private fun Throwable.describe(): String = message ?: this::class.simpleName.orEmpty()
 
 private class PacketWriterStream(private val writer: PacketWriter) : OutputStream() {
     override fun write(b: Int) = writer.writeByte(b.toByte())

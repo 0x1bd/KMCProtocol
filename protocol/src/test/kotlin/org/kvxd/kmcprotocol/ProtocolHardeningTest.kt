@@ -130,6 +130,32 @@ class ProtocolHardeningTest {
     }
 
     @Test
+    fun `a configured nbt depth limit below the default is enforced`() {
+        val depth = 32
+        val writer = PacketWriter()
+        repeat(depth) {
+            writer.writeByte(NbtType.COMPOUND.id.toByte())
+            writer.writeNbtString("n")
+        }
+        repeat(depth + 1) { writer.writeByte(NbtType.END.id.toByte()) }
+
+        val reader = PacketReader(writer.toByteArray(), limits = ProtocolLimits(maxNbtDepth = 4))
+        val failure = assertFailsWith<KmcProtocolException> { reader.readNbtPayload(NbtType.COMPOUND) }
+        assertTrue(failure.message!!.contains("maximum depth of 4"), failure.message!!)
+    }
+
+    @Test
+    fun `an nbt array is bounded by the remaining bytes and not only by the byte budget`() {
+        val writer = PacketWriter()
+        writer.writeInt(1_000_000)
+        writer.writeBytes(ByteArray(8))
+
+        val reader = PacketReader(writer.toByteArray())
+        val failure = assertFailsWith<KmcProtocolException> { reader.readNbtPayload(NbtType.BYTE_ARRAY) }
+        assertTrue(failure.message!!.contains("larger Nbt than allowed"), failure.message!!)
+    }
+
+    @Test
     fun `an nbt array longer than the remaining bytes is rejected`() {
         val writer = PacketWriter()
         writer.writeInt(Int.MAX_VALUE / 8)

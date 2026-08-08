@@ -7,19 +7,26 @@ import io.ktor.network.sockets.openWriteChannel
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.cancel
-import java.util.ArrayDeque
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.EOFException
 import org.kvxd.kmcprotocol.core.CompressionSetupPacket
 import org.kvxd.kmcprotocol.core.HandshakeIntentPacket
 import org.kvxd.kmcprotocol.core.KmcConnectionException
+import org.kvxd.kmcprotocol.core.KmcProtocolException
 import org.kvxd.kmcprotocol.core.MinecraftPacket
 import org.kvxd.kmcprotocol.core.ProtocolData
 import org.kvxd.kmcprotocol.core.ProtocolState
@@ -31,6 +38,8 @@ import org.kvxd.kmcprotocol.network.middleware.ProtocolMiddlewarePipeline
 import org.kvxd.kmcprotocol.network.middleware.RawProtocolPacket
 import org.kvxd.kmcprotocol.network.middleware.opposite
 
+private object MiddlewareEmittedPacket : MinecraftPacket
+
 abstract class Connection internal constructor(
     val data: ProtocolData,
     private val direction: Direction,
@@ -38,37 +47,53 @@ abstract class Connection internal constructor(
     middlewares: List<ProtocolMiddleware> = emptyList(),
 ) : AutoCloseable {
 
-    private data class PendingInboundPacket(
-        val packet: RawProtocolPacket,
-        val frameLength: Int?,
-    )
-
     private val writeChannel: ByteWriteChannel = socket.openWriteChannel()
     private val readChannel: ByteReadChannel = socket.openReadChannel()
 
     private val sendMutex = Mutex()
     private val receiveMutex = Mutex()
+    private val inboundDecodeMutex = Mutex()
 
     private val closed = AtomicBoolean(false)
     private val closeHandlers = CopyOnWriteArrayList<() -> Unit>()
-    private val pendingInbound = ArrayDeque<PendingInboundPacket>()
+
+    private val middlewareScope: CoroutineScope? = if (middlewares.isEmpty()) {
+        null
+    } else {
+        CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    }
+
+    private val middlewareIncoming: Channel<MinecraftPacket>? = if (middlewares.isEmpty()) {
+        null
+    } else {
+        Channel(Channel.BUFFERED)
+    }
 
     private val middlewarePipeline: ProtocolMiddlewarePipeline? = if (middlewares.isEmpty()) {
         null
     } else try {
         ProtocolMiddlewarePipeline(
-            middlewares,
-            ProtocolMiddlewareContext(
+            middlewares = middlewares,
+            context = ProtocolMiddlewareContext(
                 protocolData = data,
                 inboundDirection = direction,
                 localAddress = socket.localAddress,
                 remoteAddress = socket.remoteAddress,
             ),
+            coroutineScope = checkNotNull(middlewareScope),
+            emittedPacketHandler = { packet -> handleEmittedPacket(packet) },
+            failureHandler = { cause -> handleMiddlewareFailure(cause) },
         )
     } catch (cause: Throwable) {
+        runCatching { middlewareScope?.cancel() }
         runCatching { readChannel.cancel() }
         runCatching { socket.close() }
         throw cause
+    }
+
+    private val middlewareReaderJob: Job? = middlewarePipeline?.let { pipeline ->
+        pipeline.start()
+        checkNotNull(middlewareScope).launch { pumpMiddlewareInbound() }
     }
 
     val remoteAddress: String = runCatching { socket.remoteAddress.toString() }.getOrDefault("<unavailable>")
@@ -99,11 +124,10 @@ abstract class Connection internal constructor(
                 if (pipeline == null) {
                     data.send(packet, writeChannel)
                 } else {
-                    val outboundDirection = direction.opposite()
                     val rawPacket = RawProtocolPacket(
                         bytes = data.encodePacketBytes(packet),
                         state = data.state,
-                        direction = outboundDirection,
+                        direction = direction.opposite(),
                     )
                     val transformedPackets = pipeline.outbound(rawPacket)
                     for (transformed in transformedPackets) {
@@ -154,55 +178,73 @@ abstract class Connection internal constructor(
     }
 
     private suspend fun receiveWithMiddlewareUnlocked(): MinecraftPacket? {
+        val result = checkNotNull(middlewareIncoming).receiveCatching()
+        result.exceptionOrNull()?.let { throw it }
+        return result.getOrNull()
+    }
+
+    private suspend fun pumpMiddlewareInbound() {
         val pipeline = checkNotNull(middlewarePipeline)
-        while (true) {
-            var pending = pendingInbound.pollFirst()
-            if (pending == null) {
-                val frame = try {
-                    data.receivePacketBytes(readChannel, direction)
-                } catch (cause: CancellationException) {
-                    throw cause
-                } catch (cause: EOFException) {
-                    return null
-                } catch (cause: ClosedReceiveChannelException) {
-                    return null
-                } catch (cause: Throwable) {
-                    if (cause.isEndOfStream()) return null
-                    throw connectionError("receiving packet", cause)
-                }
+        val incoming = checkNotNull(middlewareIncoming)
 
-                val transformedPackets = try {
-                    pipeline.inbound(
-                        RawProtocolPacket(
-                            bytes = frame.bytes,
-                            state = data.state,
-                            direction = direction,
-                        ),
-                    )
-                } catch (cause: CancellationException) {
-                    throw cause
-                } catch (cause: Throwable) {
-                    throw connectionError("applying inbound protocol middleware", cause)
-                }
-
+        try {
+            while (!closed.get()) {
+                val frame = data.receivePacketBytes(readChannel, direction)
+                val transformedPackets = pipeline.inbound(
+                    RawProtocolPacket(
+                        bytes = frame.bytes,
+                        state = data.state,
+                        direction = direction,
+                    ),
+                )
                 for (transformed in transformedPackets) {
-                    pendingInbound.addLast(PendingInboundPacket(transformed, frame.frameLength))
+                    deliverInboundPacket(transformed, frame.frameLength)
                 }
-                pending = pendingInbound.pollFirst()
-                if (pending == null) continue
             }
-
-            val packet = try {
-                data.decodePacketBytes(pending.packet.bytes, direction, pending.frameLength)
-            } catch (cause: CancellationException) {
-                throw cause
-            } catch (cause: Throwable) {
-                throw connectionError("decoding middleware-transformed packet", cause)
+        } catch (cause: CancellationException) {
+            throw cause
+        } catch (cause: EOFException) {
+            incoming.close()
+        } catch (cause: ClosedReceiveChannelException) {
+            incoming.close()
+        } catch (cause: Throwable) {
+            if (cause.isEndOfStream()) {
+                incoming.close()
+            } else {
+                incoming.close(connectionError("receiving packet through protocol middleware", cause))
             }
-
-            applyProtocolFlow(packet)
-            return packet
         }
+    }
+
+    private suspend fun handleEmittedPacket(packet: RawProtocolPacket) {
+        when (packet.direction) {
+            direction -> deliverInboundPacket(packet, frameLength = null)
+            direction.opposite() -> data.sendPacketBytes(packet.bytes, writeChannel, MiddlewareEmittedPacket)
+            else -> throw KmcProtocolException(
+                "Protocol middleware emitted packet with unexpected direction ${packet.direction}.",
+            )
+        }
+    }
+
+    private suspend fun deliverInboundPacket(packet: RawProtocolPacket, frameLength: Int?) {
+        if (packet.direction != direction) {
+            throw KmcProtocolException(
+                "Protocol middleware delivered ${packet.direction} to the inbound application path; " +
+                        "expected $direction.",
+            )
+        }
+
+        inboundDecodeMutex.withLock {
+            val decoded = data.decodePacketBytes(packet.bytes, direction, frameLength)
+            applyProtocolFlow(decoded)
+            checkNotNull(middlewareIncoming).send(decoded)
+        }
+    }
+
+    private fun handleMiddlewareFailure(cause: Throwable) {
+        val wrapped = connectionError("applying scheduled protocol middleware", cause)
+        middlewareIncoming?.close(wrapped)
+        close()
     }
 
     suspend fun flushAndClose() {
@@ -217,6 +259,9 @@ abstract class Connection internal constructor(
         if (!closed.compareAndSet(false, true)) return
 
         runCatching { middlewarePipeline?.close() }
+        runCatching { middlewareIncoming?.close() }
+        runCatching { middlewareReaderJob?.cancel() }
+        runCatching { middlewareScope?.cancel() }
         runCatching { readChannel.cancel() }
         runCatching { socket.close() }
 

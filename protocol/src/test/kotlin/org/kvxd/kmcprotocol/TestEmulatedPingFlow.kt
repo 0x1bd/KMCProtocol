@@ -2,7 +2,10 @@ package org.kvxd.kmcprotocol
 
 import org.kvxd.kmcprotocol.core.ProtocolState
 import org.kvxd.kmcprotocol.generated.Protocols
+import org.kvxd.kmcprotocol.network.client.Client
+import org.kvxd.kmcprotocol.network.server.Server
 import org.kvxd.kmcprotocol.network.middleware.ProtocolMiddleware
+import org.kvxd.kmcprotocol.network.middleware.ProtocolMiddlewareEmitter
 import org.kvxd.kmcprotocol.network.middleware.ProtocolMiddlewareSession
 import org.kvxd.kmcprotocol.network.middleware.RawProtocolPacket
 import org.kvxd.kmcprotocol.packets.generated.v1_21_4.configuration.clientbound.ClientboundFinishConfigurationPacket
@@ -11,16 +14,18 @@ import org.kvxd.kmcprotocol.packets.generated.v1_21_4.handshake.serverbound.Serv
 import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.clientbound.ClientboundCompressPacket
 import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.serverbound.ServerboundLoginAcknowledgedPacket
 import org.kvxd.kmcprotocol.packets.generated.v1_21_4.login.serverbound.ServerboundLoginStartPacket
+import org.kvxd.kmcprotocol.packets.generated.v1_21_4.status.clientbound.ClientboundPingPacket
 import org.kvxd.kmcprotocol.packets.generated.v1_21_4.status.serverbound.ServerboundPingStartPacket
 import io.ktor.network.sockets.*
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import org.kvxd.kmcprotocol.network.client.Client
-import org.kvxd.kmcprotocol.network.server.Server
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 
 class TestEmulated {
@@ -110,6 +115,82 @@ class TestEmulated {
 
         serverSessionJob.join()
 
+        client.close()
+        server.close()
+    }
+
+
+    @Test
+    fun `scheduled inbound middleware emission wakes a blocked receiver`() = runBlocking {
+        val emitter = CompletableDeferred<ProtocolMiddlewareEmitter>()
+        val middleware = ProtocolMiddleware { context ->
+            emitter.complete(context.emitter)
+            object : ProtocolMiddlewareSession {}
+        }
+        val server = Server.bind(
+            InetSocketAddress("127.0.0.1", 0),
+            middlewares = listOf(middleware),
+        ) {
+            Protocols.V1_21_4.protocolData(automaticProtocolFlow = false)
+        }
+        val port = (server.localAddress as InetSocketAddress).port
+        val client = Client.connect(
+            InetSocketAddress("127.0.0.1", port),
+            Protocols.V1_21_4.protocolData(automaticProtocolFlow = false),
+        )
+        val session = withTimeout(5_000.milliseconds) { server.accept() }
+        val expected = ServerboundSetProtocolPacket(769, "emitted", port, 1)
+        val waitingReceiver = async { withTimeout(5_000.milliseconds) { session.receive() } }
+
+        assertTrue(
+            emitter.await().scheduleInbound(
+                RawProtocolPacket(
+                    bytes = session.data.encodePacketBytes(expected),
+                    state = ProtocolState.Handshake,
+                    direction = org.kvxd.kmcprotocol.network.Direction.Serverbound,
+                ),
+            ),
+        )
+
+        assertEquals(expected, waitingReceiver.await())
+        client.close()
+        server.close()
+    }
+
+    @Test
+    fun `scheduled outbound middleware emission reaches the wire without an application send`() = runBlocking {
+        val emitter = CompletableDeferred<ProtocolMiddlewareEmitter>()
+        val middleware = ProtocolMiddleware { context ->
+            emitter.complete(context.emitter)
+            object : ProtocolMiddlewareSession {}
+        }
+        val server = Server.bind(
+            InetSocketAddress("127.0.0.1", 0),
+            middlewares = listOf(middleware),
+        ) {
+            Protocols.V1_21_4.protocolData(automaticProtocolFlow = false)
+        }
+        val port = (server.localAddress as InetSocketAddress).port
+        val client = Client.connect(
+            InetSocketAddress("127.0.0.1", port),
+            Protocols.V1_21_4.protocolData(automaticProtocolFlow = false),
+        )
+        val session = withTimeout(5_000.milliseconds) { server.accept() }
+        session.data.switchTo(ProtocolState.Status)
+        client.data.switchTo(ProtocolState.Status)
+        val expected = ClientboundPingPacket(42L)
+
+        assertTrue(
+            emitter.await().scheduleOutbound(
+                RawProtocolPacket(
+                    bytes = session.data.encodePacketBytes(expected),
+                    state = ProtocolState.Status,
+                    direction = org.kvxd.kmcprotocol.network.Direction.Clientbound,
+                ),
+            ),
+        )
+
+        assertEquals(expected, withTimeout(5_000.milliseconds) { client.receive() })
         client.close()
         server.close()
     }

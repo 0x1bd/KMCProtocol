@@ -10,6 +10,7 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
@@ -41,6 +42,10 @@ abstract class GenerateMinecraftPackets : DefaultTask() {
     @get:Input
     abstract val clientboundPrefix: Property<String>
 
+    @get:Input
+    @get:Optional
+    abstract val dataPackage: Property<String>
+
     @get:OutputDirectory
     abstract val outputDirectory: DirectoryProperty
 
@@ -60,6 +65,7 @@ abstract class GenerateMinecraftPackets : DefaultTask() {
             serverboundPrefix = serverboundPrefix.get(),
             clientboundPrefix = clientboundPrefix.get(),
             outputDirectory = output.toPath(),
+            dataPackage = dataPackage.orNull,
         ).generate(specs)
 
         reports.forEach { (spec, report) ->

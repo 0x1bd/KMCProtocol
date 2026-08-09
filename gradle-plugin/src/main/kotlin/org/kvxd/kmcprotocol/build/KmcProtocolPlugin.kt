@@ -37,6 +37,18 @@ abstract class KmcProtocolExtension @Inject constructor(objects: ObjectFactory) 
 
     abstract val registryPackage: Property<String>
 
+    abstract val generateMinecraftData: Property<Boolean>
+
+    abstract val minecraftDataSets: ListProperty<String>
+
+    abstract val minecraftDataPackage: Property<String>
+
+    abstract val minecraftDataChunkSize: Property<Int>
+
+    abstract val generateNamedAccessors: Property<Boolean>
+
+    abstract val minecraftDataOutputDirectory: DirectoryProperty
+
     abstract val serverboundPrefix: Property<String>
 
     abstract val clientboundPrefix: Property<String>
@@ -146,6 +158,18 @@ class KmcProtocolPlugin : Plugin<Project> {
         extension.runtimePackage.convention("org.kvxd.kmcprotocol")
         extension.packetPackage.convention("org.kvxd.kmcprotocol.packets.generated")
         extension.registryPackage.convention("org.kvxd.kmcprotocol.generated")
+        extension.generateMinecraftData.convention(
+            project.providers.gradleProperty("kmcGenerateMinecraftData").map(String::toBoolean).orElse(true)
+        )
+        extension.minecraftDataSets.convention(listOf("blocks", "items", "entities"))
+        extension.minecraftDataPackage.convention("org.kvxd.kmcprotocol.data.generated")
+        extension.minecraftDataChunkSize.convention(32)
+        extension.generateNamedAccessors.convention(
+            project.providers.gradleProperty("kmcGenerateNamedAccessors").map(String::toBoolean).orElse(true)
+        )
+        extension.minecraftDataOutputDirectory.convention(
+            project.layout.buildDirectory.dir("generated/sources/kmcMinecraftData/kotlin")
+        )
         extension.serverboundPrefix.convention("Serverbound")
         extension.clientboundPrefix.convention("Clientbound")
         extension.sourceSet.convention("main")
@@ -170,8 +194,26 @@ class KmcProtocolPlugin : Plugin<Project> {
             minecraftVersions.set(extension.minecraftVersions)
             refreshProtocolData.set(extension.refreshProtocolData)
             dataBaseUrl.set(extension.dataBaseUrl)
+            dataSets.set(extension.generateMinecraftData.flatMap { enabled ->
+                if (enabled) extension.minecraftDataSets else project.objects.listProperty(String::class.java)
+            })
             vendoredDataDirectory.set(extension.vendoredDataDirectory.map { it.asFile.absolutePath })
             dataDirectory.set(extension.dataDirectory)
+        }
+
+        val generateData = project.tasks.register<GenerateMinecraftData>("generateMinecraftData") {
+            group = "build"
+            description = "Generates Kotlin block, item and entity data for every configured Minecraft version."
+            dependsOn(download)
+            onlyIf { extension.generateMinecraftData.get() }
+
+            dataDirectory.set(extension.dataDirectory)
+            minecraftVersions.set(extension.minecraftVersions)
+            runtimePackage.set(extension.runtimePackage)
+            dataPackage.set(extension.minecraftDataPackage)
+            chunkSize.set(extension.minecraftDataChunkSize)
+            generateNamedAccessors.set(extension.generateNamedAccessors)
+            outputDirectory.set(extension.minecraftDataOutputDirectory)
         }
 
         val generate = project.tasks.register<GenerateMinecraftPackets>("generateMinecraftPackets") {
@@ -187,6 +229,11 @@ class KmcProtocolPlugin : Plugin<Project> {
             registryPackage.set(extension.registryPackage)
             serverboundPrefix.set(extension.serverboundPrefix)
             clientboundPrefix.set(extension.clientboundPrefix)
+            dataPackage.set(
+                extension.generateMinecraftData.flatMap { enabled ->
+                    if (enabled) extension.minecraftDataPackage else project.objects.property(String::class.java)
+                }
+            )
         }
 
         val prepareProtocolResources = project.tasks.register<Copy>("prepareMinecraftProtocolResources") {
@@ -221,9 +268,13 @@ class KmcProtocolPlugin : Plugin<Project> {
             project.pluginManager.withPlugin("org.jetbrains.kotlin.jvm") {
                 project.extensions.getByType<KotlinJvmProjectExtension>().sourceSets.named(sourceSetName) {
                     kotlin.srcDir(extension.outputDirectory)
+                    if (extension.generateMinecraftData.get()) {
+                        kotlin.srcDir(extension.minecraftDataOutputDirectory)
+                    }
                 }
                 project.tasks.named(sourceSetName.taskName("compile", "Kotlin")) {
                     dependsOn(generate)
+                    if (extension.generateMinecraftData.get()) dependsOn(generateData)
                 }
             }
 

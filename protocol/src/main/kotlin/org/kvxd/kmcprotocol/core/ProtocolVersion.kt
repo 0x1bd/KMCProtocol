@@ -4,15 +4,26 @@ import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.modules.SerializersModule
 import org.kvxd.kmcprotocol.core.encoding.NbtFormat
 import org.kvxd.kmcprotocol.core.encoding.ProtocolCodec
+import org.kvxd.kmcprotocol.data.MinecraftData
+import org.kvxd.kmcprotocol.data.MinecraftDataException
+import org.kvxd.kmcprotocol.data.MinecraftDataSource
 
 class ProtocolVersion(
     val minecraftVersion: String,
     val protocolVersion: Int,
     val protocolResourcePath: String,
     val registrySource: PacketRegistrySource,
+    val dataSource: MinecraftDataSource? = null,
 ) {
 
     val codec: ProtocolCodec by lazy { ProtocolCodec.fromResource(protocolResourcePath) }
+
+    val minecraftData: MinecraftData? get() = dataSource?.data
+
+    fun requireMinecraftData(): MinecraftData = minecraftData ?: throw MinecraftDataException(
+        "No generated block, item and entity data for Minecraft $minecraftVersion. " +
+            "Enable it with kmcProtocol { generateMinecraftData.set(true) }."
+    )
 
     val nbtFormat: NbtFormat = NbtFormat.forMinecraftVersion(minecraftVersion)
 

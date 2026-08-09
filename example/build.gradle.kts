@@ -40,6 +40,13 @@ application {
     mainClass.set("org.kvxd.kmcprotocol.example.StatusPingExampleKt")
 }
 
+tasks.register<JavaExec>("runMinecraftDataExample") {
+    group = "application"
+    description = "Prints generated block, item and entity data using the typed 1.20.4 accessors."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.kvxd.kmcprotocol.example.MinecraftDataExampleKt")
+}
+
 tasks.register<JavaExec>("runPlayStateChatSmokeServer") {
     group = "application"
     description = "Runs an offline-mode 1.21.4 play-state chat smoke server."

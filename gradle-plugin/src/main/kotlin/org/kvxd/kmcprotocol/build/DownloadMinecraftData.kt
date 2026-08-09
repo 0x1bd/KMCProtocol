@@ -27,6 +27,9 @@ abstract class DownloadMinecraftData : DefaultTask() {
     abstract val dataBaseUrl: Property<String>
 
     @get:Input
+    abstract val dataSets: ListProperty<String>
+
+    @get:Input
     @get:Optional
     abstract val vendoredDataDirectory: Property<String>
 
@@ -44,49 +47,54 @@ abstract class DownloadMinecraftData : DefaultTask() {
         val refresh = refreshProtocolData.get()
         val vendored = vendoredDataDirectory.orNull?.let(::File)
 
-        val missing = versions.filter { version ->
-            refresh || !cachedFilesPresent(root, version, vendored)
+        val incomplete = versions.filter { version ->
+            refresh || missingDataSets(root, version, vendored).isNotEmpty()
         }
-        if (missing.isEmpty()) {
+        if (incomplete.isEmpty()) {
             logger.lifecycle("minecraft-data is cached for ${versions.joinToString()}")
             return
         }
 
         val dataPaths = fetchDataPaths()
-        missing.forEach { version -> downloadVersion(version, dataPaths, root, vendored) }
+        incomplete.forEach { version -> downloadVersion(version, dataPaths, root, refresh) }
     }
 
-    private fun cachedFilesPresent(root: File, version: String, vendored: File?): Boolean {
-        if (root.protocolFile(version).isFile && root.versionFile(version).isFile) return true
-        val source = vendored ?: return false
-        if (!source.protocolFile(version).isFile || !source.versionFile(version).isFile) return false
+    private fun requiredDataSets(): List<String> =
+        listOf(ProtocolDataSet, VersionDataSet) + dataSets.get().filter { it != ProtocolDataSet && it != VersionDataSet }
 
-        source.protocolFile(version).copyTo(root.protocolFile(version).ensureParent(), overwrite = true)
-        source.versionFile(version).copyTo(root.versionFile(version).ensureParent(), overwrite = true)
-        logger.lifecycle("Using vendored minecraft-data for $version")
-        return true
-    }
+    private fun missingDataSets(root: File, version: String, vendored: File?): List<String> =
+        requiredDataSets().filter { dataSet ->
+            if (root.dataFile(version, dataSet).isFile) return@filter false
 
-    private fun downloadVersion(version: String, dataPaths: JsonObject, root: File, vendored: File?) {
+            val source = vendored?.dataFile(version, dataSet)?.takeIf(File::isFile) ?: return@filter true
+            source.copyTo(root.dataFile(version, dataSet).ensureParent(), overwrite = true)
+            logger.lifecycle("Using vendored minecraft-data $dataSet for $version")
+            false
+        }
+
+    private fun downloadVersion(version: String, dataPaths: JsonObject, root: File, refresh: Boolean) {
         val paths = dataPaths[version]?.jsonObject
             ?: throw IllegalArgumentException(
                 "Unknown Minecraft version '$version'. Versions with protocol data: " +
-                    dataPaths.keys.filter { dataPaths[it]?.jsonObject?.containsKey("protocol") == true }.joinToString()
+                    dataPaths.keys.filter { dataPaths[it]?.jsonObject?.containsKey(ProtocolDataSet) == true }
+                        .joinToString()
             )
 
-        val protocolDir = paths["protocol"]?.jsonPrimitive?.content
-            ?: throw IllegalArgumentException("minecraft-data has no protocol.json for Minecraft '$version'.")
-        val versionDir = paths["version"]?.jsonPrimitive?.content
+        requiredDataSets().forEach { dataSet ->
+            val target = root.dataFile(version, dataSet)
+            if (target.isFile && !refresh) return@forEach
 
-        logger.lifecycle("Downloading minecraft-data protocol for $version")
-        copyUrl("${dataBaseUrl.get()}/$protocolDir/protocol.json", root.protocolFile(version))
+            val directory = paths[dataSet]?.jsonPrimitive?.content
+            if (directory == null) {
+                if (dataSet == ProtocolDataSet) {
+                    throw IllegalArgumentException("minecraft-data has no protocol.json for Minecraft '$version'.")
+                }
+                logger.warn("minecraft-data has no $dataSet.json for Minecraft $version, skipping it.")
+                return@forEach
+            }
 
-        val versionFile = root.versionFile(version)
-        if (versionDir != null) {
-            copyUrl("${dataBaseUrl.get()}/$versionDir/version.json", versionFile)
-        } else {
-            vendored?.versionFile(version)?.takeIf { it.isFile }?.copyTo(versionFile.ensureParent(), overwrite = true)
-                ?: throw IllegalArgumentException("minecraft-data has no version.json for Minecraft '$version'.")
+            logger.lifecycle("Downloading minecraft-data $dataSet for $version")
+            copyUrl("${dataBaseUrl.get()}/$directory/$dataSet.json", target)
         }
     }
 
@@ -102,10 +110,17 @@ abstract class DownloadMinecraftData : DefaultTask() {
             target.ensureParent().outputStream().use(input::copyTo)
         }
     }
+
+    private companion object {
+        const val ProtocolDataSet = "protocol"
+        const val VersionDataSet = "version"
+    }
 }
 
-internal fun File.protocolFile(version: String): File = resolve("pc/$version/protocol.json")
+internal fun File.dataFile(version: String, dataSet: String): File = resolve("pc/$version/$dataSet.json")
 
-internal fun File.versionFile(version: String): File = resolve("pc/$version/version.json")
+internal fun File.protocolFile(version: String): File = dataFile(version, "protocol")
+
+internal fun File.versionFile(version: String): File = dataFile(version, "version")
 
 private fun File.ensureParent(): File = apply { parentFile.mkdirs() }

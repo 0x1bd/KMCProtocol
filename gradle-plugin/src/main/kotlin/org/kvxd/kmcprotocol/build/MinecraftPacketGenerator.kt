@@ -11,11 +11,12 @@ internal class MinecraftPacketGenerator(
     private val serverboundPrefix: String,
     private val clientboundPrefix: String,
     private val outputDirectory: Path,
+    private val dataPackage: String?,
 ) {
 
     fun generate(specs: List<ProtocolVersionSpec>): Map<ProtocolVersionSpec, GenerationReport> {
         val reports = specs.associateWith(::generateVersion)
-        ProtocolCatalogEmitter(runtimePackage, registryPackage, outputDirectory).emit(specs)
+        ProtocolCatalogEmitter(runtimePackage, registryPackage, outputDirectory, dataPackage).emit(specs)
         return reports
     }
 

@@ -14,6 +14,7 @@ internal class ProtocolCatalogEmitter(
     private val runtimePackage: String,
     private val registryPackage: String,
     private val outputDirectory: Path,
+    private val dataPackage: String?,
 ) {
     private val protocolVersion = ClassName("$runtimePackage.core", "ProtocolVersion")
     private val protocolVersionCatalog = ClassName("$runtimePackage.core", "ProtocolVersionCatalog")
@@ -35,6 +36,14 @@ internal class ProtocolCatalogEmitter(
                                 "registrySource = %T,\n",
                                 ClassName("$registryPackage.${spec.packageSuffix}", "GeneratedPacketRegistry"),
                             )
+                            .apply {
+                                if (dataPackage != null) {
+                                    add(
+                                        "dataSource = %T,\n",
+                                        ClassName("$dataPackage.${spec.packageSuffix}", "GeneratedMinecraftData"),
+                                    )
+                                }
+                            }
                             .add("⇤)")
                             .build()
                     )

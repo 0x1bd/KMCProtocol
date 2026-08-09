@@ -96,6 +96,8 @@ class MinecraftData(
         return stateId
     }
 
+    fun describeState(stateId: Int): String = requireBlockByStateId(stateId).describe(stateId)
+
     private fun normalize(name: String): String = name.trim().lowercase().removePrefix("minecraft:")
 
     private fun missing(kind: String, key: String): Nothing =

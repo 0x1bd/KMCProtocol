@@ -1,11 +1,9 @@
 package org.kvxd.kmcprotocol.core.encoding
 
-import kotlinx.serialization.SerialName
+import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.SerializationStrategy
 import net.lenni0451.mcstructs.nbt.NbtTag
 import java.util.UUID
-import kotlin.reflect.KProperty1
-import kotlin.reflect.full.findAnnotation
-import kotlin.reflect.full.memberProperties
 
 internal class DynamicValue(
     val value: Any? = null,
@@ -72,7 +70,7 @@ internal fun DynamicValue.asStringList(): List<String> =
     (value as? Iterable<*>)?.mapNotNull { item ->
         when (val unwrapped = item.unwrapDynamicValue()) {
             is String -> unwrapped
-            is Enum<*> -> unwrapped.serialName()
+            is Enum<*> -> unwrapped.name
             else -> unwrapped?.toString()
         }
     } ?: emptyList()
@@ -86,14 +84,25 @@ internal fun Any?.toDynamicValue(): DynamicValue =
         is Iterable<*> -> DynamicValue.list(map { it.toDynamicValue() })
         is Map<*, *> -> DynamicValue.obj(entries.associate { it.key.toString() to it.value.toDynamicValue() })
         is UUID -> DynamicValue(this)
-        is Enum<*> -> DynamicValue(serialName())
+        is Enum<*> -> DynamicValue(name)
         is String, is Number, is Boolean -> DynamicValue(this)
-        else -> DynamicValue.obj(
-            this::class.memberProperties.associate { property ->
-                property.protocolName() to property.getter.call(this).toDynamicValue()
-            }
+        else -> throw IllegalArgumentException(
+            "A serializer is required to convert ${this::class.qualifiedName} to a dynamic protocol value."
         )
     }
 
-private fun KProperty1<out Any, *>.protocolName(): String =
-    findAnnotation<SerialName>()?.value ?: name
+internal fun <T> T.toDynamicValue(serializer: SerializationStrategy<T>): DynamicValue =
+    when (this) {
+        null -> DynamicValue.Null
+        is DynamicValue -> this
+        is NbtTag -> DynamicValue(this)
+        is ByteArray -> DynamicValue.bytes(this)
+        is UUID -> DynamicValue(this)
+        else -> encodeDynamicValue(serializer, this)
+    }
+
+@Suppress("UNCHECKED_CAST")
+internal fun <T> T.toDecodedDynamicValue(deserializer: DeserializationStrategy<T>): DynamicValue {
+    val serializer = deserializer as? SerializationStrategy<T>
+    return if (serializer == null) toDynamicValue() else toDynamicValue(serializer)
+}

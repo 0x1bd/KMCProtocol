@@ -2,14 +2,15 @@ package org.kvxd.kmcprotocol
 
 import io.ktor.utils.io.ByteChannel
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.SerialName
 import org.kvxd.kmcprotocol.core.KmcProtocolException
 import org.kvxd.kmcprotocol.core.ProtocolState
 import org.kvxd.kmcprotocol.core.encoding.NumberEncoding
+import org.kvxd.kmcprotocol.core.encoding.DynamicValue
 import org.kvxd.kmcprotocol.core.encoding.ProtocolSwitch
 import org.kvxd.kmcprotocol.core.encoding.resolvePath
 import org.kvxd.kmcprotocol.core.encoding.resolvePathOrUnresolved
 import org.kvxd.kmcprotocol.core.encoding.switchBranchPresent
+import org.kvxd.kmcprotocol.core.encoding.toDynamicValue
 import org.kvxd.kmcprotocol.generated.Protocols
 import org.kvxd.kmcprotocol.network.Direction
 import org.kvxd.kmcprotocol.packets.generated.v1_20_4.play.clientbound.ClientboundPlayerInfoPacket
@@ -21,14 +22,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-
-private enum class SampleAction {
-    @SerialName("add_player")
-    AddPlayer,
-
-    @SerialName("update_listed")
-    UpdateListed,
-}
 
 class SwitchPathResolutionTest {
 
@@ -134,7 +127,9 @@ class SwitchPathResolutionTest {
     @Test
     fun `a parent path resolves a flag set membership to a boolean`() {
         val frames = listOf(
-            mapOf<String, Any?>("action" to setOf(SampleAction.AddPlayer)),
+            mapOf<String, Any?>(
+                "action" to DynamicValue.list(listOf(DynamicValue("add_player"))),
+            ),
             mapOf<String, Any?>("uuid" to UUID(0L, 1L)),
         )
 
@@ -151,7 +146,9 @@ class SwitchPathResolutionTest {
             has_command = 0,
             command_node_type = 2,
         )
-        val frames = listOf(mapOf<String, Any?>("flags" to flags))
+        val frames = listOf(
+            mapOf<String, Any?>("flags" to flags.toDynamicValue(CommandNode.Flags.serializer())),
+        )
 
         assertEquals(1, frames.resolvePath("flags/has_redirect_node"))
         assertEquals(0, frames.resolvePath("flags/has_command"))
@@ -162,7 +159,7 @@ class SwitchPathResolutionTest {
     fun `a nested path ascends out of the current frame`() {
         val flags = CommandNode.Flags(0, 1, 0, 0, 0)
         val frames = listOf(
-            mapOf<String, Any?>("flags" to flags),
+            mapOf<String, Any?>("flags" to flags.toDynamicValue(CommandNode.Flags.serializer())),
             mapOf<String, Any?>("name" to "child"),
         )
 

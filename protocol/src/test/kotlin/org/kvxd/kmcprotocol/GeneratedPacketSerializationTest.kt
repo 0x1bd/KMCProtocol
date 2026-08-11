@@ -26,6 +26,7 @@ import org.kvxd.kmcprotocol.core.encoding.ProtocolSwitch
 import org.kvxd.kmcprotocol.core.encoding.resolvePath
 import org.kvxd.kmcprotocol.core.encoding.resolvePathOrUnresolved
 import org.kvxd.kmcprotocol.core.encoding.switchBranchPresent
+import org.kvxd.kmcprotocol.core.encoding.toDecodedDynamicValue
 import org.kvxd.kmcprotocol.core.encoding.ProtocolType
 import org.kvxd.kmcprotocol.core.encoding.getElementAnnotationFromIndex
 import org.kvxd.kmcprotocol.generated.v1_21_4.GeneratedPacketRegistry
@@ -256,7 +257,7 @@ internal class SamplePacketDecoder(private val codec: ProtocolCodec) : Decoder, 
         val binary = descriptor.getElementAnnotationFromIndex<ProtocolBinary>(index)
         if (arraySpec == null && binary != null) {
             val sampled = sampleBinary(binary) as T
-            recordElement(descriptor, index, sampled)
+            recordSerializableElement(descriptor, index, deserializer, sampled)
             return sampled
         }
         if (descriptor.kind == kotlinx.serialization.descriptors.StructureKind.LIST) {
@@ -272,7 +273,7 @@ internal class SamplePacketDecoder(private val codec: ProtocolCodec) : Decoder, 
             } finally {
                 arrayStack.removeAt(arrayStack.lastIndex)
             }
-            recordElement(descriptor, index, sampled)
+            recordSerializableElement(descriptor, index, deserializer, sampled)
             return sampled
         }
 
@@ -283,12 +284,12 @@ internal class SamplePacketDecoder(private val codec: ProtocolCodec) : Decoder, 
                 deserializer,
                 contextStack.lastOrNull() ?: mutableMapOf(),
             )
-            recordElement(descriptor, index, value)
+            recordSerializableElement(descriptor, index, deserializer, value)
             return value
         }
 
         val value = decodeSerializableValue(deserializer)
-        recordElement(descriptor, index, value)
+        recordSerializableElement(descriptor, index, deserializer, value)
         return value
     }
 
@@ -306,7 +307,7 @@ internal class SamplePacketDecoder(private val codec: ProtocolCodec) : Decoder, 
                     contextStack.resolvePathOrUnresolved(switch.compareTo),
                     "${descriptor.serialName}.${descriptor.getElementName(index)}",
                 )) {
-                recordElement(descriptor, index, null)
+                recordSerializableElement(descriptor, index, deserializer, null)
                 return null
             }
         }
@@ -323,7 +324,7 @@ internal class SamplePacketDecoder(private val codec: ProtocolCodec) : Decoder, 
             } finally {
                 arrayStack.removeAt(arrayStack.lastIndex)
             }
-            recordElement(descriptor, index, sampled)
+            recordSerializableElement(descriptor, index, deserializer, sampled)
             return sampled
         }
         val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index)
@@ -333,12 +334,12 @@ internal class SamplePacketDecoder(private val codec: ProtocolCodec) : Decoder, 
                 deserializer,
                 contextStack.lastOrNull() ?: mutableMapOf(),
             )
-            recordElement(descriptor, index, value)
+            recordSerializableElement(descriptor, index, deserializer, value)
             return value
         }
 
         val sampled = decodeSerializableValue(deserializer)
-        recordElement(descriptor, index, sampled)
+        recordSerializableElement(descriptor, index, deserializer, sampled)
         return sampled
     }
 
@@ -362,5 +363,14 @@ internal class SamplePacketDecoder(private val codec: ProtocolCodec) : Decoder, 
 
     private fun recordElement(descriptor: SerialDescriptor, index: Int, value: Any?) {
         contextStack.lastOrNull()?.put(descriptor.getElementName(index), value)
+    }
+
+    private fun <T> recordSerializableElement(
+        descriptor: SerialDescriptor,
+        index: Int,
+        deserializer: DeserializationStrategy<T>,
+        value: T,
+    ) {
+        recordElement(descriptor, index, value.toDecodedDynamicValue(deserializer))
     }
 }

@@ -97,8 +97,8 @@ class MinecraftEncoder(
         serializer: SerializationStrategy<T>,
         value: T,
     ) {
-        if (encodeDynamicElement(descriptor, index, value)) {
-            recordElement(descriptor, index, value)
+        if (encodeDynamicElement(descriptor, index, serializer, value)) {
+            recordSerializableElement(descriptor, index, serializer, value)
             return
         }
 
@@ -107,7 +107,7 @@ class MinecraftEncoder(
             descriptor.getElementAnnotationFromIndex<ProtocolArray>(index) == null
         ) {
             writer.writeBinary(binary, value)
-            recordElement(descriptor, index, value)
+            recordSerializableElement(descriptor, index, serializer, value)
             return
         }
         if (descriptor.kind == StructureKind.LIST) {
@@ -137,7 +137,7 @@ class MinecraftEncoder(
         } finally {
             arrayStack.removeLastOrNull()
         }
-        recordElement(descriptor, index, value)
+        recordSerializableElement(descriptor, index, serializer, value)
     }
 
     override fun beginCollection(descriptor: SerialDescriptor, collectionSize: Int): CompositeEncoder {
@@ -166,8 +166,8 @@ class MinecraftEncoder(
         serializer: SerializationStrategy<T>,
         value: T?,
     ) {
-        if (encodeDynamicElement(descriptor, index, value)) {
-            recordElement(descriptor, index, value)
+        if (encodeNullableDynamicElement(descriptor, index, serializer, value)) {
+            recordNullableSerializableElement(descriptor, index, serializer, value)
             return
         }
         val binary = descriptor.getElementAnnotationFromIndex<ProtocolBinary>(index)
@@ -191,21 +191,22 @@ class MinecraftEncoder(
                 )
             }
             if (present) writeOptionValue(descriptor, index, serializer, value!!, binary)
-            recordElement(descriptor, index, value)
+            recordNullableSerializableElement(descriptor, index, serializer, value)
             return
         }
         if (descriptor.getElementAnnotationFromIndex<ProtocolOption>(index) != null) {
             writer.writeByte(if (value == null) 0 else 1)
             if (value != null) writeOptionValue(descriptor, index, serializer, value, binary)
-            recordElement(descriptor, index, value)
+            recordNullableSerializableElement(descriptor, index, serializer, value)
             return
         }
         if (binary != null) {
             writer.writeBinary(binary, value)
-            recordElement(descriptor, index, value)
+            recordNullableSerializableElement(descriptor, index, serializer, value)
             return
         }
         encodeNullableSerializableValue(serializer, value)
+        recordNullableSerializableElement(descriptor, index, serializer, value)
     }
 
     override fun encodeInline(descriptor: SerialDescriptor): Encoder = this
@@ -241,7 +242,30 @@ class MinecraftEncoder(
 
     private fun encodeDynamicElement(descriptor: SerialDescriptor, index: Int, value: Any?): Boolean {
         val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index) ?: return false
-        codec.encodeAny(codec.parse(protocolType.json), value, writer, currentContext())
+        codec.encodeAny(codec.parse(protocolType.json), value.toDynamicValue(), writer, currentContext())
+        return true
+    }
+
+    private fun <T> encodeDynamicElement(
+        descriptor: SerialDescriptor,
+        index: Int,
+        serializer: SerializationStrategy<T>,
+        value: T,
+    ): Boolean {
+        val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index) ?: return false
+        codec.encodeAny(codec.parse(protocolType.json), value.toDynamicValue(serializer), writer, currentContext())
+        return true
+    }
+
+    private fun <T : Any> encodeNullableDynamicElement(
+        descriptor: SerialDescriptor,
+        index: Int,
+        serializer: SerializationStrategy<T>,
+        value: T?,
+    ): Boolean {
+        val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index) ?: return false
+        val dynamicValue = if (value == null) DynamicValue.Null else value.toDynamicValue(serializer)
+        codec.encodeAny(codec.parse(protocolType.json), dynamicValue, writer, currentContext())
         return true
     }
 
@@ -308,6 +332,24 @@ class MinecraftEncoder(
     private fun recordElement(descriptor: SerialDescriptor, index: Int, value: Any?) {
         contextStack.lastOrNull()?.put(descriptor.getElementName(index), value)
     }
+
+    private fun <T> recordSerializableElement(
+        descriptor: SerialDescriptor,
+        index: Int,
+        serializer: SerializationStrategy<T>,
+        value: T,
+    ) = recordElement(descriptor, index, value.toDynamicValue(serializer))
+
+    private fun <T : Any> recordNullableSerializableElement(
+        descriptor: SerialDescriptor,
+        index: Int,
+        serializer: SerializationStrategy<T>,
+        value: T?,
+    ) = recordElement(
+        descriptor,
+        index,
+        if (value == null) DynamicValue.Null else value.toDynamicValue(serializer),
+    )
 }
 
 internal fun SerialDescriptor.numberEncoding(index: Int): NumberEncoding? =

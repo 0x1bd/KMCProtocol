@@ -24,7 +24,6 @@ class MinecraftDecoder(
     private var pendingArrayLevel: ArrayLevel? = null
     private var pendingFlags: ProtocolFlags? = null
     private var pendingFlagsEncoding: NumberEncoding = NumberEncoding.VarInt
-    private val enumConstantCache = mutableMapOf<String, List<Any>>()
 
     override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
         if (indexStack.isEmpty()) return CompositeDecoder.DECODE_DONE
@@ -126,7 +125,7 @@ class MinecraftDecoder(
         val protocolType = descriptor.getElementAnnotationFromIndex<ProtocolType>(index)
         if (protocolType != null) {
             val dynamic = codec.decodeAny(codec.parse(protocolType.json), deserializer, reader, currentContext())
-            recordElement(descriptor, index, dynamic)
+            recordSerializableElement(descriptor, index, deserializer, dynamic)
             return dynamic
         }
 
@@ -136,7 +135,7 @@ class MinecraftDecoder(
         ) {
             @Suppress("UNCHECKED_CAST")
             val direct = reader.readBinary(binary) as T
-            recordElement(descriptor, index, direct)
+            recordSerializableElement(descriptor, index, deserializer, direct)
             return direct
         }
         if (descriptor.kind == StructureKind.LIST) {
@@ -174,7 +173,7 @@ class MinecraftDecoder(
         } finally {
             arrayStack.removeLastOrNull()
         }
-        recordElement(descriptor, index, value)
+        recordSerializableElement(descriptor, index, deserializer, value)
         return value
     }
 
@@ -209,26 +208,26 @@ class MinecraftDecoder(
                 contextStack.resolvePathOrUnresolved(switch.compareTo),
                 "${descriptor.serialName}.${descriptor.getElementName(index)}",
             )) {
-                recordElement(descriptor, index, null)
+                recordSerializableElement(descriptor, index, deserializer, null)
                 return null
             }
             val branch = readOptionValue(descriptor, index, deserializer, binarySpec)
-            recordElement(descriptor, index, branch)
+            recordSerializableElement(descriptor, index, deserializer, branch)
             return branch
         }
         if (descriptor.getElementAnnotationFromIndex<ProtocolOption>(index) != null) {
             if (reader.readByte().toInt() == 0) {
-                recordElement(descriptor, index, null)
+                recordSerializableElement(descriptor, index, deserializer, null)
                 return null
             }
             val present = readOptionValue(descriptor, index, deserializer, binarySpec)
-            recordElement(descriptor, index, present)
+            recordSerializableElement(descriptor, index, deserializer, present)
             return present
         }
         binarySpec?.let { binary ->
             @Suppress("UNCHECKED_CAST")
             val direct = reader.readBinary(binary) as T?
-            recordElement(descriptor, index, direct)
+            recordSerializableElement(descriptor, index, deserializer, direct)
             return direct
         }
 
@@ -238,7 +237,7 @@ class MinecraftDecoder(
                     "ProtocolType or ProtocolBinary annotation, so its absence has no wire representation."
             )
         val value = codec.decodeAny(codec.parse(protocolType.json), deserializer, reader, currentContext())
-        recordElement(descriptor, index, value)
+        recordSerializableElement(descriptor, index, deserializer, value)
         return value
     }
 
@@ -305,36 +304,24 @@ class MinecraftDecoder(
         val flags = pendingFlags
         if (flags != null) {
             pendingFlags = null
-            @Suppress("UNCHECKED_CAST")
-            return readFlagSet(deserializer) as T
+            return readFlagSet(deserializer)
         }
         return super.decodeSerializableValue(deserializer)
     }
 
-    private fun readFlagSet(deserializer: DeserializationStrategy<*>): Set<Any> {
+    private fun <T> readFlagSet(deserializer: DeserializationStrategy<T>): T {
         val mask = reader.readNumber(pendingFlagsEncoding).toInt()
         val enumDescriptor = deserializer.descriptor.getElementDescriptor(0)
-        val constants = enumConstantsOf(enumDescriptor.serialName)
-        return (0 until enumDescriptor.elementsCount)
+        val selectedNames = (0 until enumDescriptor.elementsCount)
             .filter { mask and (1 shl it) != 0 }
-            .map { constants[it] }
-            .toSet()
-    }
-
-    private fun enumConstantsOf(serialName: String): List<Any> =
-        enumConstantCache.getOrPut(serialName) { loadEnumConstants(serialName) }
-
-    private fun loadEnumConstants(serialName: String): List<Any> {
-        var candidate = serialName
-        while (true) {
-            val loaded = runCatching { Class.forName(candidate) }.getOrNull()
-            if (loaded != null) return loaded.enumConstants?.toList().orEmpty()
-            val separator = candidate.lastIndexOf('.')
-            if (separator < 0) {
-                throw KmcProtocolException("Cannot resolve enum class for serial name '$serialName'.")
+            .map { index ->
+                enumDescriptor.getElementAnnotations(index)
+                    .filterIsInstance<kotlinx.serialization.SerialName>()
+                    .firstOrNull()
+                    ?.value
+                    ?: enumDescriptor.getElementName(index)
             }
-            candidate = candidate.substring(0, separator) + "$" + candidate.substring(separator + 1)
-        }
+        return deserializer.deserialize(DynamicValueBackedDecoder(selectedNames))
     }
 
     private fun kotlinx.serialization.descriptors.SerialKind.isIntegral(): Boolean =
@@ -351,5 +338,14 @@ class MinecraftDecoder(
 
     private fun recordElement(descriptor: SerialDescriptor, index: Int, value: Any?) {
         contextStack.lastOrNull()?.put(descriptor.getElementName(index), value)
+    }
+
+    private fun <T> recordSerializableElement(
+        descriptor: SerialDescriptor,
+        index: Int,
+        deserializer: DeserializationStrategy<T>,
+        value: T,
+    ) {
+        recordElement(descriptor, index, value.toDecodedDynamicValue(deserializer))
     }
 }

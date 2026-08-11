@@ -14,11 +14,11 @@ class ProtocolCodec(val types: ProtocolTypeTable) {
 
     internal fun encodeAny(
         type: JsonElement,
-        value: Any?,
+        value: DynamicValue,
         writer: PacketWriter,
         context: MutableMap<String, Any?>,
     ) {
-        DynamicEncoder(types, writer, sampler).encode(type, value.toDynamicValue(), ProtocolScope.root(context))
+        DynamicEncoder(types, writer, sampler).encode(type, value, ProtocolScope.root(context))
     }
 
     internal fun <T> decodeAny(

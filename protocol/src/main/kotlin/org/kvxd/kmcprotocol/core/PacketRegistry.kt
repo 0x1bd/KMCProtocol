@@ -1,9 +1,7 @@
 package org.kvxd.kmcprotocol.core
 
 import org.kvxd.kmcprotocol.network.Direction
-import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.serializer
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 
@@ -73,10 +71,12 @@ class PacketRegistry(
         }
     }
 
-    @OptIn(InternalSerializationApi::class)
     @Suppress("UNCHECKED_CAST")
     private fun PacketRegistrySource.packetSerializer(
         packetClass: KClass<out MinecraftPacket>,
     ): KSerializer<MinecraftPacket> =
-        (serializerFor(packetClass) ?: packetClass.serializer()) as KSerializer<MinecraftPacket>
+        requireNotNull(serializerFor(packetClass)) {
+            "Packet registry source ${this::class.qualifiedName} does not provide a serializer for " +
+                packetClass.qualifiedName
+        } as KSerializer<MinecraftPacket>
 }

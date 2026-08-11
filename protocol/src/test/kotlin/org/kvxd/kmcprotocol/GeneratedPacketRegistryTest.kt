@@ -8,6 +8,7 @@ import kotlin.reflect.full.findAnnotation
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class GeneratedPacketRegistryTest {
@@ -36,6 +37,11 @@ class GeneratedPacketRegistryTest {
                 assertNotNull(
                     data.registry.getPacketSerializerByClass(state, packetClass),
                     "${packetClass.qualifiedName} is not registered by class"
+                )
+                assertSame(
+                    version.registrySource.serializerFor(packetClass),
+                    data.registry.getPacketSerializerByClass(state, packetClass),
+                    "${packetClass.qualifiedName} was not registered with its generated serializer",
                 )
 
                 val registeredById = data.registry.getPacketMetadata(state, metadata.id, metadata.direction)

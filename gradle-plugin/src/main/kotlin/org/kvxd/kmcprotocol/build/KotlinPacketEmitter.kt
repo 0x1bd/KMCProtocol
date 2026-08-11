@@ -28,6 +28,7 @@ internal class KotlinPacketEmitter(
     private val direction = ClassName("${options.runtimePackage}.network", "Direction")
     private val serialName = ClassName("kotlinx.serialization", "SerialName")
     private val serializable = ClassName("kotlinx.serialization", "Serializable")
+    private val kSerializer = ClassName("kotlinx.serialization", "KSerializer")
     private val uuidSerializer = ClassName("${options.runtimePackage}.core.encoding", "UuidSerializer")
     private val nbtTagSerializer = ClassName("${options.runtimePackage}.core.encoding", "NbtTagSerializer")
     private val protocolArray = ClassName("${options.runtimePackage}.core.encoding", "ProtocolArray")
@@ -138,6 +139,24 @@ internal class KotlinPacketEmitter(
                             val statePropertyName = state.className.replaceFirstChar { it.lowercase() }
                             add("%T.%L -> %LById\n", protocolState, state.className, statePropertyName)
                         }
+                        add("⇤}\n")
+                    }.build()
+                )
+                .build()
+        )
+
+        registry.addFunction(
+            FunSpec.builder("serializerFor")
+                .addModifiers(KModifier.OVERRIDE)
+                .addParameter("packetClass", packetClassType)
+                .returns(kSerializer.parameterizedBy(WildcardTypeName.producerOf(minecraftPacket)).copy(nullable = true))
+                .addCode(
+                    CodeBlock.builder().apply {
+                        add("return when (packetClass) {\n⇥")
+                        entries.sortedBy { it.className.canonicalName }.forEach { entry ->
+                            add("%T::class -> %T.serializer()\n", entry.className, entry.className)
+                        }
+                        add("else -> null\n")
                         add("⇤}\n")
                     }.build()
                 )

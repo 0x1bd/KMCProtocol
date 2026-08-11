@@ -33,7 +33,7 @@ class PacketRegistry(
     fun registerStatePackets(state: ProtocolState, source: PacketRegistrySource) {
         source.packetsById(state).forEach { (direction, packets) ->
             packets.forEach { (id, packetClass) ->
-                registerPacket(state, RegisteredPacket(id, direction, packetClass, packetClass.packetSerializer()))
+                registerPacket(state, RegisteredPacket(id, direction, packetClass, source.packetSerializer(packetClass)))
             }
         }
     }
@@ -75,6 +75,8 @@ class PacketRegistry(
 
     @OptIn(InternalSerializationApi::class)
     @Suppress("UNCHECKED_CAST")
-    private fun KClass<out MinecraftPacket>.packetSerializer(): KSerializer<MinecraftPacket> =
-        serializer() as KSerializer<MinecraftPacket>
+    private fun PacketRegistrySource.packetSerializer(
+        packetClass: KClass<out MinecraftPacket>,
+    ): KSerializer<MinecraftPacket> =
+        (serializerFor(packetClass) ?: packetClass.serializer()) as KSerializer<MinecraftPacket>
 }
